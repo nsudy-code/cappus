@@ -23,16 +23,11 @@ Two things make this work, and both are easy to get wrong without the bundled to
 `<skill>` below means this skill's folder (the one holding this SKILL.md). Commands use `python`; on
 macOS and most Linux systems that is usually `python3` (and `python3 -m pip`).
 
+`doctor.py` (step 1 of the workflow) tells you whether any of this is missing.
+
 ```bash
-python <skill>/scripts/doctor.py                     # what is ready and what to fix; needs nothing installed
 python -m pip install -r <skill>/requirements.txt    # pycapcut + numpy
 ```
-
-Run `doctor.py` first on a new machine, and again when a script fails for a reason that is not the
-spec. It prints `ready`, `problems` (each with its fix) and `notes`. **If it finds no CapCut
-desktop**, say so before planning anything: the draft opens only in CapCut desktop (a free download
-for Windows and macOS). Offer the choice: install CapCut and get an editable draft, or get a
-finished MP4 rendered with ffmpeg instead.
 
 Captions from speech need one more, optional package (see step 2):
 `python -m pip install -r <skill>/requirements-captions.txt` (faster-whisper).
@@ -43,13 +38,25 @@ plain-text lists from `catalog.py` and `inspect_draft.py --list`.
 
 ## Workflow
 
-### 1. Get the brief - but do not interrogate
+### 1. Check the setup, then get the brief - but do not interrogate
+
+**Run `python <skill>/scripts/doctor.py` at the start of every session**, before anything else, even
+if the packages look installed. It takes under a second, needs nothing installed, and reports the
+setup and the user's CapCut plan in one call. Run it again when a script fails for a reason that is
+not the spec.
+
+- `ready: false`: fix each item in `problems` first. Each says how (usually the pip line in Setup).
+- **No CapCut desktop** (a problem says so): tell the user before planning anything. The draft opens
+  only in CapCut desktop, a free download for Windows and macOS. Offer the choice: install CapCut
+  and get an editable draft, or get a finished MP4 rendered with ffmpeg instead.
+- `notes` are not blocking (an untested CapCut version, no speech-to-text package yet). Mention one
+  only when it affects this job.
 
 You need: the media files, where the video is going (decides aspect ratio), rough length, and the vibe.
 Infer what you can and state your assumptions instead of asking a list of questions. Defaults:
 vertical 1080x1920 at 30 fps, 15-40 s for short-form.
 
-**Know the user's CapCut plan.** Run `python <skill>/scripts/tier.py` at the start. It prints the saved plan:
+**Know the user's CapCut plan.** `plan.tier` in the doctor report is the saved plan:
 
 - `pro`: the full catalog is open, and Pro items are allowed with no `allow_pro` in the spec. Pro
   often has the more polished option for a job (film-stock looks, real camera moves, light leaks,

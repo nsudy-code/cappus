@@ -6,6 +6,11 @@ Ask Claude for an edit in plain language. Instead of a flattened MP4, you get a 
 every cut, text layer, transition, effect, filter, animation, keyframe and caption sits on the
 CapCut timeline, ready for you to adjust and export.
 
+![A draft written by cappus, playing in CapCut desktop. Then a title is selected and its text settings open.](docs/demo.gif)
+
+*A draft cappus wrote, open in CapCut: four clips with transitions, titles, word-by-word captions,
+effects, filters, a picture-in-picture and music. Every item on the timeline can still be edited.*
+
 Works with **free CapCut and CapCut Pro**. You choose which one you have, and cappus only uses
 resources your account can export.
 
@@ -105,7 +110,8 @@ every command below. From a clone you can run
 `pycapcut` writes the draft files, and `numpy` is used for beat detection. If they are missing,
 Claude installs them on first use. To check a machine, run
 `python skills/capcut-editor/scripts/doctor.py`: it checks Python, these packages, ffmpeg, CapCut
-desktop and its drafts folder, and says how to fix anything missing. It needs nothing installed.
+desktop and its drafts folder, and says how to fix anything missing. It needs nothing installed,
+and Claude runs it at the start of every session.
 
 **Optional: captions from speech.**
 
@@ -227,6 +233,7 @@ Some features cannot be written into a draft. Each takes one or two clicks in Ca
 | "Animation loss", a missing effect icon, or a font that falls back to the default | CapCut no longer serves that resource. Open the draft once, return to the home screen, and tell Claude. It runs `check_resources.py read`, replaces the items, rebuilds, and records them so they are not used again. Please [report it](https://github.com/nsudy-code/cappus/issues/new/choose) so everyone gets the fix. |
 | An effect shows a download spinner | CapCut downloads each resource the first time it is used. Stay online and wait. |
 | "Media offline" | The source files were moved or renamed. Relink them in CapCut, or tell Claude the new location. |
+| Clicking a rebuilt draft does nothing | CapCut stayed open while cappus 0.5.1 or older rebuilt a draft CapCut had already opened. Restart CapCut. Current versions avoid this. |
 | The draft opens with an empty timeline | Your CapCut version may store drafts differently. Please [open a bug report](https://github.com/nsudy-code/cappus/issues/new/choose) with your CapCut version (Settings > About). |
 | Pro items in a draft you cannot export | Your plan is set to Pro, or the draft was built for Pro. Tell Claude "I use the free version of CapCut" and ask it to rebuild the draft. |
 
@@ -297,6 +304,7 @@ skills/capcut-editor/
   requirements.txt
   requirements-captions.txt Optional speech-to-text dependency
 docs/cara-pakai.md          User guide in Indonesian
+docs/demo.gif               The animation at the top of this README
 examples/                   Demo specs and a synthetic media generator
 .claude-plugin/             Plugin and marketplace manifests
 ```

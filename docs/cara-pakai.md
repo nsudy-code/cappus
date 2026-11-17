@@ -117,7 +117,7 @@ python skills/capcut-editor/scripts/doctor.py
 
 Skrip ini mengecek Python, paket di atas, ffmpeg, CapCut desktop, dan folder draft-nya, lalu
 menyebut cara memperbaiki yang kurang. Skrip ini tidak butuh paket apa pun, jadi bisa dijalankan
-sebelum langkah 1. Claude juga menjalankannya saat pertama kali dipakai. Kalau CapCut desktop tidak
+sebelum langkah 1. Claude juga menjalankannya di awal setiap sesi. Kalau CapCut desktop tidak
 ada, Claude memberi tahu dulu dan menawarkan dua pilihan: pasang CapCut (gratis, Windows atau
 macOS), atau minta video jadi (MP4) yang dirender dengan ffmpeg.
 
@@ -351,6 +351,7 @@ masing-masing.
 | Video HP tampil miring | Minta Claude memutar klip tersebut 90 derajat. |
 | Claude bilang `pycapcut` belum terpasang | Ulangi langkah install dependensi di bagian 2. Untuk melihat semua yang kurang sekaligus, jalankan `doctor.py` (bagian 2, langkah 3). |
 | Build ulang gagal dengan "nothing was changed" | Ada program yang sedang membuka file di draft itu: CapCut (kembali ke halaman utama), OneDrive, atau antivirus. Draft Anda tidak berubah. Coba lagi sebentar lagi. |
+| Draft hasil build ulang tidak terbuka saat diklik | CapCut tetap terbuka saat cappus 0.5.1 atau yang lebih lama membangun ulang draft yang sudah pernah dibuka. Tutup lalu buka lagi CapCut. Versi sekarang tidak mengalami ini. |
 | Caption ada yang salah eja atau salah dengar | Beri tahu Claude ejaan yang benar (nama, merek, istilah). Claude mentranskrip ulang dengan petunjuk ejaan itu, atau dengan model yang lebih akurat. |
 ## 11. Menjalankan skrip sendiri
 

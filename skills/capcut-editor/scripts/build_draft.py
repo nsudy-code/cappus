@@ -1211,6 +1211,7 @@ def write_draft(builder: Builder, drafts_dir: Path, name: str, overwrite: bool, 
     try:
         target.mkdir(parents=True)
         for file_name, text in files.items():
+            (target / file_name).parent.mkdir(parents=True, exist_ok=True)
             (target / file_name).write_text(text, encoding="utf-8")
     except BaseException as e:
         shutil.rmtree(target, ignore_errors=True)
@@ -1232,8 +1233,44 @@ def write_draft(builder: Builder, drafts_dir: Path, name: str, overwrite: bool, 
     return target, back_up(staged, name)
 
 
+TIMELINE_ID = re.compile(r"[0-9A-Za-z-]{1,64}")
+
+
+def _timelines(old: Path, content: str) -> tuple:
+    """(content, extra files) for a draft replacing the one at old.
+
+    CapCut 9 converts a draft to project form the first time it opens it: Timelines/project.json names
+    the main timeline, whose files sit in Timelines/<id>/. While CapCut keeps running it remembers that
+    form, and clicking a replacement draft without it does nothing until CapCut restarts (seen in 9.8).
+    So a draft replacing one that has Timelines/project.json gets the same layout, under the same main
+    timeline id. Anything unreadable there means no extra files: the draft then opens after a restart."""
+    try:
+        project = json.loads((old / "Timelines" / "project.json").read_bytes().decode("utf-8-sig"))
+        main = project["main_timeline_id"]
+    except (OSError, UnicodeDecodeError, ValueError, KeyError, TypeError):
+        return content, {}
+    if not isinstance(main, str) or not TIMELINE_ID.fullmatch(main):
+        return content, {}
+    data = json.loads(content)
+    if data.get("id") != main:
+        data["id"] = main
+        content = json.dumps(data, ensure_ascii=False, indent=4)
+    now = int(time.time() * 1_000_000)
+    timelines = project.get("timelines")
+    tl_name = next((t.get("name") for t in timelines if isinstance(t, dict) and t.get("id") == main), None) \
+        if isinstance(timelines, list) else None
+    project.update({"main_timeline_id": main, "update_time": now, "timelines": [
+        {"create_time": now, "id": main, "is_marked_delete": False,
+         "name": tl_name if isinstance(tl_name, str) and tl_name else "Timeline 01", "update_time": now}]})
+    return content, {
+        f"Timelines/{main}/draft_content.json": content,
+        f"Timelines/{main}/draft_info.json": content,
+        "Timelines/project.json": json.dumps(project, ensure_ascii=False),
+    }
+
+
 def _draft_files(builder: Builder, drafts_dir: Path, target: Path, name: str, spec_text: str) -> dict:
-    content = builder.script.dumps()
+    content, timelines = _timelines(target, builder.script.dumps())
     with open(cc_assets.get_asset_path("DRAFT_META_TEMPLATE"), encoding="utf-8") as f:
         meta = json.load(f)
     now = int(time.time() * 1_000_000)
@@ -1248,6 +1285,7 @@ def _draft_files(builder: Builder, drafts_dir: Path, target: Path, name: str, sp
         "draft_content.json": content,
         "draft_info.json": content,
         "draft_meta_info.json": json.dumps(meta, ensure_ascii=False),
+        **timelines,
         BUILD_FILE: json.dumps({"built_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
                                 "signature_sha256": signature_hash(sig), "signature": sig},
                                ensure_ascii=False, separators=(",", ":")),

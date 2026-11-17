@@ -297,3 +297,81 @@ def test_failed_write_puts_the_old_draft_back(built, cappus_home, monkeypatch):
     assert snapshot(folder) == before
     assert empty(drafts.parent / build_draft.STAGING)
     assert empty(cappus_home / "backups")
+
+
+def open_in_capcut(folder, main=None, name="Timeline 01", timelines=None):
+    """Convert the draft the way CapCut 9 does the first time it opens one: Timelines/project.json names
+    the main timeline, and Timelines/<id>/ holds its files."""
+    data = json.loads((folder / "draft_info.json").read_text(encoding="utf-8"))
+    main = main or data["id"]
+    (folder / "Timelines" / main).mkdir(parents=True)
+    for n in ("draft_content.json", "draft_info.json"):
+        (folder / "Timelines" / main / n).write_text(json.dumps(data), encoding="utf-8")
+    entry = {"create_time": 1, "id": main, "is_marked_delete": False, "name": name, "update_time": 1}
+    (folder / "Timelines" / "project.json").write_text(json.dumps({
+        "config": {"color_space": 0, "hdr_vivid": False}, "create_time": 1, "id": main, "main_timeline_id": main,
+        "timelines": timelines or [entry], "update_time": 1, "version": 0}), encoding="utf-8")
+    return main
+
+
+def read(path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def test_rebuild_keeps_the_timelines_layout_capcut_made(built):
+    """CapCut 9.8 kept running would not open a replacement draft without Timelines/ until a restart."""
+    spec_path, drafts, folder = built
+    main = open_in_capcut(folder, name="My cut")
+    res = rebuild(spec_path, drafts, "--overwrite")
+    assert res.returncode == 0, res.stderr
+    project = read(folder / "Timelines" / "project.json")
+    assert project["main_timeline_id"] == project["id"] == main
+    assert [(t["id"], t["name"], t["is_marked_delete"]) for t in project["timelines"]] == [(main, "My cut", False)]
+    assert project["config"] == {"color_space": 0, "hdr_vivid": False}
+    root = (folder / "draft_content.json").read_text(encoding="utf-8")
+    for n in ("draft_content.json", "draft_info.json"):
+        assert (folder / "Timelines" / main / n).read_text(encoding="utf-8") == root
+    assert read(folder / "draft_content.json")["id"] == main
+    assert edit_check(folder)["edited"] is False
+    res = rebuild(spec_path, drafts, "--overwrite")  # and again, over the layout it wrote itself
+    assert res.returncode == 0, res.stderr
+    assert read(folder / "Timelines" / "project.json")["main_timeline_id"] == main
+
+
+def test_rebuild_uses_the_main_timeline_id_capcut_chose(built):
+    spec_path, drafts, folder = built
+    other = {"create_time": 1, "id": "SECOND-1", "is_marked_delete": False, "name": "Timeline 02", "update_time": 1}
+    main = open_in_capcut(folder, main="ABCD-1234", timelines=[
+        {"create_time": 1, "id": "ABCD-1234", "is_marked_delete": False, "name": "Timeline 01", "update_time": 1}, other])
+    res = rebuild(spec_path, drafts, "--overwrite")
+    assert res.returncode == 0, res.stderr
+    assert read(folder / "draft_content.json")["id"] == main
+    assert read(folder / "Timelines" / main / "draft_info.json")["id"] == main
+    assert [t["id"] for t in read(folder / "Timelines" / "project.json")["timelines"]] == [main]
+    assert sorted(p.name for p in (folder / "Timelines").iterdir()) == [main, "project.json"]
+
+
+def test_draft_never_opened_in_capcut_gets_no_timelines(built):
+    spec_path, drafts, folder = built
+    assert not (folder / "Timelines").exists()
+    res = rebuild(spec_path, drafts, "--overwrite")
+    assert res.returncode == 0, res.stderr
+    assert not (folder / "Timelines").exists()
+
+
+@pytest.mark.parametrize("project", [
+    "not json", "[]", "{}", '{"main_timeline_id": 5}', '{"main_timeline_id": "../../escape"}',
+    '{"main_timeline_id": ""}', '{"main_timeline_id": "ok-1", "timelines": "x"}',
+])
+def test_unreadable_project_json_is_left_behind(built, project):
+    spec_path, drafts, folder = built
+    (folder / "Timelines").mkdir()
+    (folder / "Timelines" / "project.json").write_text(project, encoding="utf-8")
+    res = rebuild(spec_path, drafts, "--overwrite")
+    assert res.returncode == 0, res.stderr
+    files = sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file())
+    if project.startswith('{"main_timeline_id": "ok-1"'):
+        assert "Timelines/ok-1/draft_info.json" in files
+    else:
+        assert not (folder / "Timelines").exists(), files
+    assert not (drafts / "escape").exists() and not (drafts.parent / "escape").exists()

@@ -19,7 +19,9 @@ of the timeline as built: clip timing, source ranges, speed, volume, transforms,
 audio tools once turned on (Reduce noise, Normalize loudness, Isolate voice, channels, beat markers); no ids, so CapCut re-saving the file on open does not change it; CapCut also re-measures media lengths on
 open, so timings within 0.05 s count as unchanged). A draft with `remove_bg` clips
 also gets a `matting/` folder when CapCut first opens it. It holds CapCut's cutout masks, about
-3 MB per second of video, and CapCut rebuilds it if it is missing.
+3 MB per second of video, and CapCut rebuilds it if it is missing. A draft that replaces one
+CapCut 9 has already opened also gets `Timelines/project.json` and `Timelines/<id>/` (see
+Revising a draft below).
 
 Media is **linked, not copied**. Moving or renaming the source files makes CapCut show "media
 offline"; relinking in CapCut fixes it.
@@ -45,6 +47,13 @@ rename fails, the build stops with "nothing was changed", and the draft is exact
 again once the file is closed. Only after the new draft is written does the old one go on to the
 backups folder, by rename on the same drive or by copy from another drive. If that copy fails, the
 report says where the old version was kept.
+
+The first time CapCut 9 opens a draft, it converts it to project form: `Timelines/project.json`
+names the main timeline, and `Timelines/<id>/` holds that timeline's files. While CapCut keeps
+running it remembers this. In 9.8, clicking a replacement draft without that layout did nothing
+until CapCut was restarted. So when the draft being replaced has `Timelines/project.json`, the new
+draft gets the same layout under the same main timeline id, with the new timeline in all four
+timeline files. Drafts rebuilt by cappus 0.5.1 or older lack it; restart CapCut to open those.
 
 Neither flag deletes anything. The replaced version moves to `~/.cappus/backups/<name>-<time>`, and
 the build report names it under `previous_version`. The newest 5 backups per draft name are kept;
@@ -155,7 +164,8 @@ an uncurated animation is fine as long as the builder accepts it.
 | symptom | cause and fix |
 |---|---|
 | Draft not in the project list | CapCut was open during the build: go back to home or restart it. Custom drafts location: rebuild with `--drafts-dir`. |
-| Draft opens but the timeline is empty | Very new CapCut builds may read `Timelines/<id>/draft_info.json`. Report the CapCut version (Settings > About) - this needs a builder update; nothing in the spec will fix it. |
+| Clicking a rebuilt draft does nothing | cappus 0.5.1 or older rebuilt a draft CapCut had already opened, and CapCut stayed running. Restart CapCut. Rebuilds from 0.5.2 keep CapCut's `Timelines/` layout (see Revising a draft). |
+| Draft opens but the timeline is empty | Very new CapCut builds may read only `Timelines/<id>/draft_info.json`, which the builder writes only when it replaces a draft CapCut had opened. Report the CapCut version (Settings > About) - this needs a builder update; nothing in the spec will fix it. |
 | An effect/transition shows a download spinner | CapCut downloads resources on first use; needs internet. Wait, then it plays. |
 | "animation loss", a missing icon, or a font that falls back to the default | CapCut no longer serves that catalog item. Run `check_resources.py read "<draft>"`, replace what it lists, rebuild, and record it with `--save` (see above). |
 | A `remove_bg` clip still shows its background, or says "Applying Auto cutout" | CapCut computes the cutout the first time the draft opens, a few seconds per clip, then keeps it in the draft's `matting/` folder. Wait. If it never finishes, select the clip > Video > Remove BG and tick Auto removal again. |
