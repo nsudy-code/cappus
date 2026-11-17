@@ -109,6 +109,18 @@ Buka sesi Claude **baru** (skill dibaca saat sesi dimulai), lalu tanya: "skill c
 terpasang?". Claude bisa melihat daftar skill yang aktif. Kalau dipasang sebagai plugin, skill ini
 juga muncul sebagai `/cappus:capcut-editor` saat Anda mengetik `/`.
 
+Untuk mengecek isi komputernya, jalankan dari folder repo:
+
+```bash
+python skills/capcut-editor/scripts/doctor.py
+```
+
+Skrip ini mengecek Python, paket di atas, ffmpeg, CapCut desktop, dan folder draft-nya, lalu
+menyebut cara memperbaiki yang kurang. Skrip ini tidak butuh paket apa pun, jadi bisa dijalankan
+sebelum langkah 1. Claude juga menjalankannya saat pertama kali dipakai. Kalau CapCut desktop tidak
+ada, Claude memberi tahu dulu dan menawarkan dua pilihan: pasang CapCut (gratis, Windows atau
+macOS), atau minta video jadi (MP4) yang dirender dengan ffmpeg.
+
 ### Langkah 4: pilih CapCut gratis atau Pro
 
 Bilang saja ke Claude, misalnya "Saya pakai CapCut gratis" atau "Saya punya CapCut Pro". Kalau
@@ -221,8 +233,11 @@ Tulis saja apa yang ingin diubah, misalnya:
 Claude mengubah spec lalu membangun ulang draft. Beberapa hal yang perlu diketahui:
 
 - **Kembali ke halaman utama CapCut** (jangan biarkan draft itu terbuka) sebelum Claude menulis ulang.
+  Kalau ada program lain yang sedang membuka file di draft itu (OneDrive, pemindaian antivirus),
+  build ulang berhenti tanpa mengubah apa pun. Coba lagi semenit kemudian.
 - **Perubahan manual Anda di CapCut aman.** Setiap build mencatat sidik timeline. Kalau Anda sudah
-  mengubah draft di CapCut (sekadar membuka dan memutar tidak dihitung), build ulang berhenti dan
+  mengubah draft di CapCut (sekadar membuka dan memutar tidak dihitung, tapi menyalakan Reduce noise
+  atau menambah beat marker dihitung), build ulang berhenti dan
   Claude bertanya dulu: buat draft baru dengan nama lain (misalnya "... v2") supaya keduanya ada,
   atau ganti versi Anda.
 - **Versi yang diganti tidak dihapus.** Ia dipindah ke `~/.cappus/backups/<nama>-<waktu>`; 5 terbaru
@@ -334,7 +349,8 @@ masing-masing.
 | "Media offline" | File sumber dipindah atau diganti nama. Tautkan ulang di CapCut, atau kembalikan file ke tempatnya. |
 | Teks terlalu besar atau kecil | Ukuran teks adalah tebakan awal. Minta Claude mengubahnya, atau ubah langsung di CapCut. |
 | Video HP tampil miring | Minta Claude memutar klip tersebut 90 derajat. |
-| Claude bilang `pycapcut` belum terpasang | Ulangi langkah install dependensi di bagian 2. |
+| Claude bilang `pycapcut` belum terpasang | Ulangi langkah install dependensi di bagian 2. Untuk melihat semua yang kurang sekaligus, jalankan `doctor.py` (bagian 2, langkah 3). |
+| Build ulang gagal dengan "nothing was changed" | Ada program yang sedang membuka file di draft itu: CapCut (kembali ke halaman utama), OneDrive, atau antivirus. Draft Anda tidak berubah. Coba lagi sebentar lagi. |
 | Caption ada yang salah eja atau salah dengar | Beri tahu Claude ejaan yang benar (nama, merek, istilah). Claude mentranskrip ulang dengan petunjuk ejaan itu, atau dengan model yang lebih akurat. |
 ## 11. Menjalankan skrip sendiri
 

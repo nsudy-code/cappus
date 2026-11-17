@@ -1,6 +1,6 @@
 ---
 name: capcut-editor
-description: Edit videos by producing a real CapCut draft project that the user opens and keeps editing in CapCut desktop - every cut, text, transition, effect, filter, animation and keyframe stays editable on the timeline. Use this whenever the user wants a video edited, cut, assembled, captioned (including auto captions transcribed from the speech), synced to music, reformatted for TikTok/Reels/Shorts, or made to "look cool" from their footage/photos/audio, and especially when they mention CapCut, a CapCut project/draft/template, or wanting to tweak the result themselves afterwards. Also use it to revise a draft this skill made earlier. Prefer this over rendering a flat MP4 with ffmpeg unless the user explicitly asks for a rendered file only.
+description: Edit videos by producing a real CapCut draft project that the user opens and keeps editing in CapCut desktop - every cut, text, transition, effect, filter, animation and keyframe stays editable on the timeline. Use this whenever the user wants a video edited, cut, assembled, captioned (including auto captions transcribed from the speech), synced to music, reformatted for TikTok/Reels/Shorts, or made to "look cool" from their footage/photos/audio, and especially when they mention CapCut, a CapCut project/draft/template, or wanting to tweak the result themselves afterwards. Also use it to revise a draft this skill made earlier. Prefer this over rendering a flat MP4 with ffmpeg when the user has (or will install) CapCut desktop on Windows or macOS, unless they explicitly ask for a rendered file only.
 ---
 
 # CapCut Editor
@@ -24,8 +24,15 @@ Two things make this work, and both are easy to get wrong without the bundled to
 macOS and most Linux systems that is usually `python3` (and `python3 -m pip`).
 
 ```bash
+python <skill>/scripts/doctor.py                     # what is ready and what to fix; needs nothing installed
 python -m pip install -r <skill>/requirements.txt    # pycapcut + numpy
 ```
+
+Run `doctor.py` first on a new machine, and again when a script fails for a reason that is not the
+spec. It prints `ready`, `problems` (each with its fix) and `notes`. **If it finds no CapCut
+desktop**, say so before planning anything: the draft opens only in CapCut desktop (a free download
+for Windows and macOS). Offer the choice: install CapCut and get an editable draft, or get a
+finished MP4 rendered with ffmpeg instead.
 
 Captions from speech need one more, optional package (see step 2):
 `python -m pip install -r <skill>/requirements-captions.txt` (faster-whisper).

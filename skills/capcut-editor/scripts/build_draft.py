@@ -84,13 +84,18 @@ KF_PROPS = {
 TEXT_KF = {"x", "y", "scale", "rotation"}
 MOTIONS = {"push_in", "pull_out", "pan_left", "pan_right", "pan_up", "pan_down"}
 
-_REF = re.compile(r"^@([A-Za-z0-9_\-]+)(?:\.(start|end))?\s*(?:([+-])\s*([0-9.]+))?$")
-_END = re.compile(r"^end\s*(?:([+-])\s*([0-9.]+))?$")
+_REF = re.compile(r"^@([A-Za-z0-9_\-]+)(?:\.(start|end))?\s*(?:([+-])\s*(\d+(?:\.\d*)?|\.\d+))?$")
+_END = re.compile(r"^end\s*(?:([+-])\s*(\d+(?:\.\d*)?|\.\d+))?$")
 _TC = re.compile(r"^(?:(\d+):)?(\d+):(\d+(?:\.\d+)?)$")
 
 
 def us(seconds) -> int:
     return int(round(float(seconds) * 1_000_000))
+
+
+def secs(value, ctx, lo=None, above=None) -> int:
+    """A length of time in seconds from the spec -> microseconds, naming the field when it is not a number."""
+    return us(num(value, ctx, lo=lo, above=above))
 
 
 def sec(micros: int) -> float:
@@ -99,7 +104,7 @@ def sec(micros: int) -> float:
 
 def hex_rgb(value, ctx="color"):
     if isinstance(value, (list, tuple)) and len(value) == 3:
-        return tuple(float(v) for v in value)
+        return tuple(num(v, ctx, lo=0, hi=1) for v in value)
     if isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value.strip()):
         v = value.strip()
         return tuple(int(v[i:i + 2], 16) / 255 for i in (1, 3, 5))
@@ -319,7 +324,7 @@ class Builder:
         if isinstance(value, bool):
             raise SpecError(f"{ctx}: time must be a number or reference, got {value!r}")
         if isinstance(value, (int, float)):
-            return us(value)
+            return secs(value, ctx)
         if isinstance(value, str):
             s = value.strip()
             m = _REF.match(s)
@@ -339,7 +344,7 @@ class Builder:
                 h, mnt, sc = m.groups()
                 return us(int(h or 0) * 3600 + int(mnt) * 60 + float(sc))
             try:
-                return us(float(s))
+                return secs(float(s), ctx)
             except ValueError:
                 pass
         raise SpecError(f"{ctx}: cannot parse time {value!r} (use seconds, 'mm:ss', '@clipid', '@clipid.end-0.5', or 'end')")
@@ -356,7 +361,7 @@ class Builder:
                     raise SpecError(f"{ctx}.duration: '@{cid}' matches no clip id")
                 dur = self.clips[cid][1] - self.clips[cid][0]
             else:
-                dur = us(d)
+                dur = secs(d, f"{ctx}.duration")
         elif default_dur is not None:
             dur = default_dur
         else:
@@ -423,12 +428,12 @@ class Builder:
         """Return (source_start, source_dur, speed)."""
         speed = num(c.get("speed", 1.0), f"{ctx}.speed", lo=0.1, hi=100)
         if is_photo:
-            return 0, us(c.get("duration", 3.0)), 1.0
-        tin = us(c.get("in", 0))
+            return 0, secs(c.get("duration", 3.0), f"{ctx}.duration", above=0), 1.0
+        tin = secs(c.get("in", 0), f"{ctx}.in", lo=0)
         if "out" in c:
-            tout = us(c["out"])
+            tout = secs(c["out"], f"{ctx}.out", lo=0)
         elif "duration" in c:
-            tout = tin + int(round(us(c["duration"]) * speed))
+            tout = tin + int(round(secs(c["duration"], f"{ctx}.duration", above=0) * speed))
         else:
             tout = mat_duration
         if tout > mat_duration:
@@ -517,7 +522,7 @@ class Builder:
             if c.get(key):
                 a = named(c[key], f"{ctx}.{key}")
                 check_keys(a, {"name", "duration"}, f"{ctx}.{key}")
-                d = min(us(a["duration"]), dur) if "duration" in a else None
+                d = min(secs(a["duration"], f"{ctx}.{key}.duration", above=0), dur) if "duration" in a else None
                 seg.add_animation(self.res(kind, a["name"]), d)
         if c.get("filter"):
             f = named(c["filter"], f"{ctx}.filter")
@@ -589,12 +594,12 @@ class Builder:
                 key = k.replace("effects_adjust_", "")
                 if key not in names:
                     raise SpecError(f"{ctx}: '{member.name}' has no parameter '{k}'. Parameters: {names or 'none'}")
-                out[names.index(key)] = float(v)
+                out[names.index(key)] = num(v, f"{ctx}.{k}")
             params = out
         if not isinstance(params, list) or len(params) > len(names):
             raise SpecError(f"{ctx}: '{member.name}' takes {len(names)} parameter(s) {names}; got {params!r}")
         for v in params:
-            if v is not None and not 0 <= float(v) <= 100:
+            if v is not None and not 0 <= num(v, f"{ctx}: parameter") <= 100:
                 raise SpecError(f"{ctx}: parameter values are 0-100 (CapCut slider scale), got {v}")
         return params
 
@@ -625,7 +630,8 @@ class Builder:
                     check_keys(tr, {"name", "duration"}, f"{ctx}.transition")
                     member = self.res("transition", tr["name"])
                     limit = min(seg.duration, segs[n + 1][0].duration) // 2
-                    d = us(tr["duration"]) if "duration" in tr else member.value.default_duration
+                    d = (secs(tr["duration"], f"{ctx}.transition.duration", lo=0) if "duration" in tr
+                         else member.value.default_duration)
                     if d > limit:
                         self.warnings.append(f"{ctx}.transition shortened from {sec(d)}s to {sec(limit)}s (max is half the shorter neighbouring clip)")
                         d = limit
@@ -662,13 +668,13 @@ class Builder:
                 mat = self.amat(a.get("src"), ctx)
                 start = self.t(a.get("at", 0), f"{ctx}.at")
                 speed = num(a.get("speed", 1.0), f"{ctx}.speed", lo=0.1, hi=100)
-                tin = us(a.get("in", 0))
+                tin = secs(a.get("in", 0), f"{ctx}.in", lo=0)
                 if "end" in a:
                     tout = tin + int(round((self.t(a["end"], f"{ctx}.end") - start) * speed))
                 elif "duration" in a:
-                    tout = tin + int(round(us(a["duration"]) * speed))
+                    tout = tin + int(round(secs(a["duration"], f"{ctx}.duration", above=0) * speed))
                 elif "out" in a:
-                    tout = us(a["out"])
+                    tout = secs(a["out"], f"{ctx}.out", lo=0)
                 else:
                     tout = mat.duration
                 if tout > mat.duration:
@@ -812,7 +818,7 @@ class Builder:
                 a = named(st[key], f"{ctx}.{key}")
                 check_keys(a, {"name", "duration"}, f"{ctx}.{key}")
                 member = self.res(kind, a["name"])
-                d = us(a["duration"]) if "duration" in a else member.value.duration
+                d = secs(a["duration"], f"{ctx}.{key}.duration", above=0) if "duration" in a else member.value.duration
                 d = min(d, budget // 2 if st.get("intro") and st.get("outro") else budget)
                 if d > 0:
                     seg.add_animation(member, d)
@@ -907,28 +913,30 @@ class Builder:
                             cues.append([s0, e0, re.sub(r"<[^>]+>", "", text)])
                         break
         else:
-            for c in cap["cues"]:
-                cues.append([float(c["start"]), float(c["end"]), str(c["text"])])
+            for i, c in enumerate(cap["cues"]):
+                cues.append([num(c["start"], f"{ctx}.cues[{i}].start", lo=0),
+                             num(c["end"], f"{ctx}.cues[{i}].end", lo=0), str(c["text"])])
 
         plays = self.caption_plays(source, ctx)
-        max_gap = float(cap.get("max_gap", 0.6))
+        max_gap = num(cap.get("max_gap", 0.6), f"{ctx}.max_gap", lo=0)
         total = dropped = 0
         if words is not None:
             items, seen = [], set()
-            for w in words:
+            for i, w in enumerate(words):
                 word = str(w.get("word", w.get("text", ""))).strip()
                 if not word:
                     continue
                 total += 1
-                spots = self.map_span(plays, float(w["start"]), float(w["end"]), True)
+                spots = self.map_span(plays, num(w["start"], f"{ctx}.words[{i}].start"),
+                                      num(w["end"], f"{ctx}.words[{i}].end"), True)
                 dropped += not spots
                 for s0, e0, k in spots:
                     if (round(s0, 2), word) not in seen:  # the same speech heard on two tracks
                         seen.add((round(s0, 2), word))
                         items.append((s0, e0, word, k))
             items.sort(key=lambda x: x[0])
-            max_words = int(cap.get("max_words", 3))
-            max_chars = int(cap.get("max_chars", 18))
+            max_words = int(num(cap.get("max_words", 3), f"{ctx}.max_words", lo=1))
+            max_chars = int(num(cap.get("max_chars", 18), f"{ctx}.max_chars", lo=1))
             groups, cur = [], None
             for s0, e0, word, k in items:
                 hard = (cur is None or k != cur["k"] or s0 - cur["w"][-1][2] > max_gap
@@ -951,8 +959,8 @@ class Builder:
         elif plays is not None:
             cues = [[s0, e0, text] for c0, c1, text in cues for s0, e0, _ in self.map_span(plays, c0, c1, False)]
         cues.sort(key=lambda c: c[0])
-        offset = float(cap.get("offset", 0))
-        min_d = float(cap.get("min_duration", 0.35))
+        offset = num(cap.get("offset", 0), f"{ctx}.offset")
+        min_d = num(cap.get("min_duration", 0.35), f"{ctx}.min_duration", lo=0)
         out = []
         for n, (s0, e0, text) in enumerate(cues):
             e0 = max(e0, s0 + min_d)
@@ -1078,42 +1086,109 @@ class Builder:
         }
 
 
-def back_up(target: Path, name: str) -> Path:
-    """Move a draft folder to ~/.cappus/backups/<name>-<time> and keep the newest BACKUPS_KEPT per name."""
-    root = backups_dir()
-    root.mkdir(parents=True, exist_ok=True)
-    dest = root / f"{name}-{time.strftime('%Y%m%d-%H%M%S')}"
-    n = 2
+STAGING = ".cappus-replaced"  # next to CapCut's drafts folder, on the same drive, so moving a draft there is a rename
+COPIED = "copied"  # written next to a staged draft once its backup copy is complete
+
+
+def _unique(root: Path, name: str) -> Path:
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    dest, n = root / f"{name}-{stamp}", 2
     while dest.exists():
-        dest = root / f"{name}-{time.strftime('%Y%m%d-%H%M%S')}-{n}"
-        n += 1
+        dest, n = root / f"{name}-{stamp}-{n}", n + 1
+    return dest
+
+
+def _drop(box: Path):
+    """Delete a staging folder, and the staging root too once nothing else is in it."""
+    shutil.rmtree(box, ignore_errors=True)
     try:
-        shutil.move(str(target), str(dest))
+        box.parent.rmdir()
+    except OSError:
+        pass
+
+
+def stage_out(target: Path, name: str) -> Path:
+    """Rename a draft folder out of CapCut's drafts folder to <staging>/<name>-<time>/<name>.
+
+    A rename is all or nothing. On Windows it fails when a file in the draft is open in another
+    program (CapCut, OneDrive, an antivirus scan, the search indexer), and then nothing has changed.
+    shutil.move would instead fall back to copying and deleting file by file, which can leave a
+    broken draft behind.
+    """
+    drafts = target.parent
+    box = None
+    for root in ((drafts.parent if drafts.parent != drafts else drafts) / STAGING, drafts / STAGING):
+        try:
+            root.mkdir(exist_ok=True)
+            for old in root.iterdir():  # backed-up drafts whose files were still in use when they were deleted
+                if (old / COPIED).is_file():
+                    shutil.rmtree(old, ignore_errors=True)
+            box = _unique(root, name)
+            box.mkdir()
+            break
+        except OSError as e:  # the folder above the drafts folder is not writable: try inside it
+            error = e
+    if box is None:
+        raise SpecError(f"could not make a folder to move the old '{name}' into ({error}); nothing was changed.")
+    staged = box / name
+    try:
+        os.rename(target, staged)
     except OSError as e:
-        raise SpecError(f"could not move the old '{name}' to {dest} ({e}); nothing was changed. "
-                        "If CapCut has the draft open, ask the user to go back to the home screen.")
-    shutil.rmtree(dest / "matting", ignore_errors=True)  # Remove BG masks: a cache CapCut rebuilds
-    os.utime(dest)  # the folder time becomes the backup time, which orders the pruning below
+        _drop(box)
+        raise SpecError(
+            f"could not move the old '{name}' aside ({e.strerror or e}); nothing was changed. A program has "
+            "a file in that draft open: CapCut (ask the user to go back to the home screen), or OneDrive, "
+            "an antivirus scan or the search indexer (try again in a minute).")
+    return staged
+
+
+def back_up(staged: Path, name: str) -> str:
+    """Move a staged draft to ~/.cappus/backups/<name>-<time>, keep the newest BACKUPS_KEPT per name,
+    and return a sentence for the build report. If no backup can be made, the draft stays where
+    stage_out() put it, and the sentence says where that is."""
+    root = backups_dir()
+    box = staged.parent
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        dest = _unique(root, name)
+        try:
+            os.rename(staged, dest)  # same drive: instant
+            shutil.rmtree(dest / "matting", ignore_errors=True)  # Remove BG masks: a cache CapCut rebuilds
+        except OSError:  # another drive, or a file in it is still open: copy, leaving out that cache
+            try:
+                shutil.copytree(staged, dest, ignore=lambda d, names: ["matting"] if Path(d) == staged else [])
+            except OSError:
+                shutil.rmtree(dest, ignore_errors=True)
+                raise
+            (box / COPIED).touch()
+            shutil.rmtree(staged, ignore_errors=True)
+        os.utime(dest)  # the folder time becomes the backup time, which orders the pruning below
+    except OSError as e:
+        return (f"kept at {staged}, because copying it to {root} failed ({e}). Tell the user; to restore it, "
+                "move that folder back into CapCut's drafts folder.")
+    if not staged.exists():
+        _drop(box)
     pattern = re.compile(re.escape(name) + r"-\d{8}-\d{6}(-\d+)?$")
     old = sorted((p for p in root.iterdir() if p.is_dir() and pattern.fullmatch(p.name)),
                  key=lambda p: p.stat().st_mtime, reverse=True)
     for stale in old[BACKUPS_KEPT:]:
         shutil.rmtree(stale, ignore_errors=True)
-    return dest
+    return (f"moved to {dest} (the newest {BACKUPS_KEPT} per draft are kept; Remove BG masks are left out "
+            "and CapCut recomputes them)")
 
 
 def write_draft(builder: Builder, drafts_dir: Path, name: str, overwrite: bool, spec_text: str,
                 force: bool = False, backup: bool = True):
-    """Write the draft folder. Returns (draft folder, backup folder of the replaced draft or None).
+    """Write the draft folder. Returns (draft folder, report sentence about the replaced draft or None).
 
     Replacing an existing draft needs overwrite=True, and force=True as well when the user changed it
-    in CapCut since it was built. The replaced draft is moved to backups_dir(), never deleted, unless
-    backup=False (throwaway probe drafts).
+    in CapCut since it was built. The old draft is renamed out of the drafts folder first (all or
+    nothing), then the new one is written, and only then is the old one moved or copied to
+    backups_dir(). It is never deleted, except with backup=False (throwaway probe drafts).
     """
     if not name or re.search(r'[<>:"/\\|?*]', name):
         raise SpecError(f"draft name {name!r} is empty or has characters not allowed in a folder name")
     target = drafts_dir / name
-    saved = None
     if target.exists():
         if not (overwrite or force):
             raise SpecError(f"a draft named '{name}' already exists. Change spec.name, or pass --overwrite to replace it.")
@@ -1131,15 +1206,34 @@ def write_draft(builder: Builder, drafts_dir: Path, name: str, overwrite: bool, 
                 f"'{name}' {what} ({state['how']}{': ' + changes if changes else ''}). Rebuilding would replace "
                 "the user's changes. Ask them first: build under a new name to keep both, or rebuild with "
                 f"--force, which first moves the current version to {backups_dir()}.")
-        if backup:
-            saved = back_up(target, name)
-        else:
-            shutil.rmtree(target)
-    target.mkdir(parents=True)
+    files = _draft_files(builder, drafts_dir, target, name, spec_text)  # everything that can fail on bad input
+    staged = stage_out(target, name) if target.exists() else None
+    try:
+        target.mkdir(parents=True)
+        for file_name, text in files.items():
+            (target / file_name).write_text(text, encoding="utf-8")
+    except BaseException as e:
+        shutil.rmtree(target, ignore_errors=True)
+        if staged is not None:
+            try:
+                os.rename(staged, target)
+            except OSError:
+                raise SpecError(f"could not write the new draft ({e}). The previous version is safe at {staged}; "
+                                "move that folder back into CapCut's drafts folder.")
+            _drop(staged.parent)
+        if isinstance(e, OSError):
+            raise SpecError(f"could not write the new draft ({e}); nothing was changed.")
+        raise
+    if staged is None:
+        return target, None
+    if not backup:
+        _drop(staged.parent)
+        return target, None
+    return target, back_up(staged, name)
+
+
+def _draft_files(builder: Builder, drafts_dir: Path, target: Path, name: str, spec_text: str) -> dict:
     content = builder.script.dumps()
-    # Older CapCut builds read draft_content.json, newer ones draft_info.json; write both.
-    (target / "draft_content.json").write_text(content, encoding="utf-8")
-    (target / "draft_info.json").write_text(content, encoding="utf-8")
     with open(cc_assets.get_asset_path("DRAFT_META_TEMPLATE"), encoding="utf-8") as f:
         meta = json.load(f)
     now = int(time.time() * 1_000_000)
@@ -1148,13 +1242,17 @@ def write_draft(builder: Builder, drafts_dir: Path, name: str, overwrite: bool, 
         "draft_fold_path": target.as_posix(), "draft_root_path": drafts_dir.as_posix(),
         "tm_duration": builder.script.duration, "tm_draft_create": now, "tm_draft_modified": now,
     })
-    (target / "draft_meta_info.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
     sig = timeline_signature(json.loads(content))
-    (target / BUILD_FILE).write_text(json.dumps({
-        "built_at": time.strftime("%Y-%m-%dT%H:%M:%S"), "signature_sha256": signature_hash(sig), "signature": sig,
-    }, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    (target / MARKER).write_text(spec_text, encoding="utf-8")
-    return target, saved
+    return {
+        # Older CapCut builds read draft_content.json, newer ones draft_info.json; write both.
+        "draft_content.json": content,
+        "draft_info.json": content,
+        "draft_meta_info.json": json.dumps(meta, ensure_ascii=False),
+        BUILD_FILE: json.dumps({"built_at": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                "signature_sha256": signature_hash(sig), "signature": sig},
+                               ensure_ascii=False, separators=(",", ":")),
+        MARKER: spec_text,  # written last: its presence marks a complete draft made by this tool
+    }
 
 
 def main() -> int:
@@ -1216,8 +1314,7 @@ def main() -> int:
         report["status"] = "draft written"
         report["draft"] = str(target)
         if saved:
-            report["previous_version"] = (f"moved to {saved} (the newest {BACKUPS_KEPT} per draft are kept; "
-                                          "Remove BG masks are left out and CapCut recomputes them)")
+            report["previous_version"] = saved
     print(json.dumps(report, ensure_ascii=False, indent=1))
     return 0
 

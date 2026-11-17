@@ -103,7 +103,9 @@ On macOS and most Linux systems the command is `python3` (`python3 -m pip instal
 every command below. From a clone you can run
 `python -m pip install -r skills/capcut-editor/requirements.txt` instead.
 `pycapcut` writes the draft files, and `numpy` is used for beat detection. If they are missing,
-Claude installs them on first use.
+Claude installs them on first use. To check a machine, run
+`python skills/capcut-editor/scripts/doctor.py`: it checks Python, these packages, ffmpeg, CapCut
+desktop and its drafts folder, and says how to fix anything missing. It needs nothing installed.
 
 **Optional: captions from speech.**
 
@@ -194,12 +196,14 @@ Ask for changes in the same way: "make the title smaller", "swap the second and 
 
 - Claude only overwrites drafts that cappus created. Your other CapCut projects are never touched.
 - Each build records a fingerprint of the timeline. If you changed the draft in CapCut since then
-  (opening and playing it does not count), the rebuild stops and Claude asks you first: keep both
-  under different names, or replace yours.
+  (opening and playing it does not count; audio settings such as Reduce noise or beat markers do),
+  the rebuild stops and Claude asks you first: keep both under different names, or replace yours.
 - A replaced version is never deleted. It moves to `~/.cappus/backups/<name>-<time>`; the newest 5
   per draft are kept. To restore one, close it in CapCut, move the current draft folder out, and
   move the backup into CapCut's drafts folder under the original name.
-- Close the draft in CapCut (return to the home screen) before a rebuild.
+- Close the draft in CapCut (return to the home screen) before a rebuild. If another program has a
+  file in the draft open (OneDrive, an antivirus scan), the rebuild stops without changing
+  anything; try again a minute later.
 
 ## Finishing in CapCut
 
@@ -239,6 +243,7 @@ JSON and has `--help`.
 | `build_draft.py` | Validate a spec (`--check`) and write it as a CapCut draft |
 | `inspect_draft.py` | Read an existing draft, including your manual edits in CapCut |
 | `tier.py` | Show or set your CapCut plan (free or Pro) |
+| `doctor.py` | Check the setup: Python, packages, ffmpeg, CapCut desktop and its drafts folder |
 | `check_resources.py` | Find catalog items CapCut can no longer load |
 
 Try the bundled demo:
@@ -284,6 +289,7 @@ skills/capcut-editor/
     build_draft.py          Spec to CapCut draft
     inspect_draft.py        Read existing drafts
     tier.py                 Free or Pro setting
+    doctor.py               Setup check
     check_resources.py      Detect resources CapCut no longer loads
     aliases.json            ~490 curated free resources with English aliases
     aliases_pro.json        ~390 curated Pro resources with English aliases

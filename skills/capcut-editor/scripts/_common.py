@@ -4,7 +4,6 @@ from __future__ import annotations
 import difflib
 import hashlib
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -16,6 +15,9 @@ except ImportError:  # pragma: no cover
         "pycapcut is not installed for this Python interpreter.\n"
         f"Run:  {sys.executable} -m pip install -r \"{req}\""
     )
+
+from _env import (backups_dir, config_path, find_drafts_dir, load_config,  # noqa: F401 (used by the scripts)
+                  save_config, user_tier)
 
 # Windows consoles default to a legacy code page; catalog names are often CJK.
 for _stream in (sys.stdout, sys.stderr):
@@ -100,37 +102,6 @@ def unavailable_note(kind: str, member):
 
 
 # ---------- the user's CapCut plan (free or Pro), remembered per user ----------
-
-def config_path() -> Path:
-    return Path(os.environ.get("CAPPUS_CONFIG") or (Path.home() / ".cappus" / "config.json"))
-
-
-def load_config() -> dict:
-    try:
-        with open(config_path(), encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except (OSError, json.JSONDecodeError):
-        return {}
-
-
-def save_config(cfg: dict) -> Path:
-    path = config_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
-    return path
-
-
-def user_tier():
-    """Return (tier, source): tier is "pro", "free" or None when nobody has said yet."""
-    env = (os.environ.get("CAPPUS_TIER") or "").strip().lower()
-    if env in ("pro", "free"):
-        return env, "CAPPUS_TIER environment variable"
-    saved = load_config().get("tier")
-    if saved in ("pro", "free"):
-        return saved, str(config_path())
-    return None, "not set"
-
 
 def display_name(member) -> str:
     meta = member.value
@@ -242,9 +213,11 @@ def resolve(kind: str, name, allow_pro: bool = False, allow_unavailable: bool = 
 # ---------- did the user change a draft in CapCut? ----------
 
 # Material kinds CapCut adds or rewrites on its own when it opens a draft; they say nothing about an edit.
-_SIG_SKIP = {"speeds", "canvases", "sound_channel_mappings", "vocal_separations", "placeholder_infos",
-             "material_colors", "beats", "loudnesses", "realtime_denoises", "smart_relights",
-             "multi_language_refs"}
+_SIG_SKIP = {"speeds", "canvases", "placeholder_infos", "material_colors", "smart_relights", "multi_language_refs"}
+# Audio tools CapCut attaches to clips in their off state when it saves a draft. They count only once
+# the user turns one on. Field names are from CapCut 9.8 (MaterialRealtimeDenoise, MaterialLoudness,
+# MaterialBeat in videoeditor.dll, and the off-state materials it writes).
+_TOOL_KINDS = {"realtime_denoises", "loudnesses", "vocal_separations", "sound_channel_mappings", "beats"}
 
 
 def _r(value, nd=4):
@@ -278,6 +251,25 @@ def _material_key(kind: str, m: dict):
     return [kind, str(m.get("resource_id") or m.get("effect_id") or m.get("name") or m.get("type") or "")]
 
 
+def _tool_state(kind: str, m: dict):
+    """A key for an audio tool the user turned on, or None while it is off."""
+    if kind == "realtime_denoises":
+        return ["reduce noise", _r(m.get("denoise_mode")), _r(m.get("denoise_rate"))] if m.get("is_denoise") else None
+    if kind == "loudnesses":
+        return ["normalize loudness", _r(m.get("target_loudness"))] if m.get("enable") else None
+    if kind == "vocal_separations":
+        removed = m.get("removed_sounds") or []
+        return ["isolate voice", m.get("choice"), json.dumps(removed, sort_keys=True)] if m.get("choice") or removed else None
+    if kind == "sound_channel_mappings":
+        on = m.get("type") not in (None, "", "none") or m.get("audio_channel_mapping")
+        return ["channels", m.get("type"), m.get("audio_channel_mapping")] if on else None
+    if kind == "beats":
+        user = m.get("user_beats") or []
+        on = user or m.get("enable_ai_beats")
+        return ["beats", json.dumps(user, sort_keys=True), bool(m.get("enable_ai_beats"))] if on else None
+    return None
+
+
 SIG_VERSION = 2
 # CapCut re-measures media when it opens a draft (an MP3 of 16.039 s became 16.067 s) and stretches a
 # clip that plays its file to the end. Times within this slack count as equal.
@@ -307,8 +299,10 @@ def timeline_signature(data: dict) -> dict:
             tr, src = s.get("target_timerange") or {}, s.get("source_timerange") or {}
             kind, m = by_id.get(s.get("material_id"), ("?", {}))
             clip = s.get("clip") or {}
-            extras = sorted(json.dumps(_material_key(*by_id[ref]), ensure_ascii=False)
-                            for ref in s.get("extra_material_refs") or [] if ref in by_id)
+            refs = [by_id[ref] for ref in s.get("extra_material_refs") or [] if ref in by_id]
+            extras = sorted(json.dumps(_material_key(k, x), ensure_ascii=False) for k, x in refs if k not in _TOOL_KINDS)
+            tools = sorted(json.dumps(on, ensure_ascii=False)
+                           for on in (_tool_state(k, x) for k, x in refs if k in _TOOL_KINDS) if on)
             keyframes = sorted(
                 [k.get("property_type"), [[kf.get("time_offset"), [_r(v) for v in kf.get("values") or []]]
                                           for kf in k.get("keyframe_list") or []]]
@@ -320,7 +314,7 @@ def timeline_signature(data: dict) -> dict:
                 full = m.get("duration") if kind in ("videos", "audios") and m.get("type") != "photo" else None
                 to_end = isinstance(full, (int, float)) and full > 0 and s0 + sd >= full - _SLACK_US
                 src_part = [s0, "end" if to_end else sd]
-            segs.append((start, dur, {
+            seg = {
                 "t": round(start / 1e6, 2),  # for messages only; not compared
                 "dur": None if src_part and src_part[1] == "end" else dur, "src": src_part,
                 "speed": _r(s.get("speed", 1)), "volume": _r(s.get("volume", 1)),
@@ -331,7 +325,10 @@ def timeline_signature(data: dict) -> dict:
                          _r((clip.get("transform") or {}).get("x")), _r((clip.get("transform") or {}).get("y"))]
                 if clip else None,
                 "extras": extras, "keyframes": keyframes,
-            }))
+            }
+            if tools:  # left out while all are off, so drafts built before this was added compare the same
+                seg["tools"] = tools
+            segs.append((start, dur, seg))
         out, prev_end = [], 0
         for start, dur, seg in sorted(segs, key=lambda x: (x[0], x[1])):
             seg["gap"] = start - prev_end
@@ -353,7 +350,7 @@ def _close(a, b) -> bool:
 
 
 _FIELD_NAMES = {"gap": "position", "dur": "length", "src": "trim", "clip": "transform",
-                "extras": "effects/animations", "material": "media"}
+                "extras": "effects/animations", "material": "media", "tools": "audio tools"}
 
 
 def _segment_changes(x: dict, y: dict) -> list:
@@ -375,10 +372,6 @@ def signature_hash(sig: dict) -> str:
 MARKER = ".cappus.json"           # copy of the spec; marks a draft this tool may overwrite
 BUILD_FILE = ".cappus-build.json"  # timeline signature at build time, to detect edits made in CapCut
 BACKUPS_KEPT = 5                   # per draft name
-
-
-def backups_dir() -> Path:
-    return config_path().parent / "backups"
 
 
 def newest_timeline(folder: Path):
@@ -460,22 +453,3 @@ def edit_check(folder: Path) -> dict:
                  if p.name in ("draft_info.json", "draft_content.json"))
     return {"edited": newest - built > 5,
             "how": "file times (built by an older cappus, so opening the draft in CapCut also counts)"}
-
-
-def find_drafts_dir(explicit=None):
-    """Locate CapCut's draft folder. Returns a Path or None."""
-    candidates = []
-    if explicit:
-        candidates.append(Path(explicit))
-    if os.environ.get("CAPCUT_DRAFTS"):
-        candidates.append(Path(os.environ["CAPCUT_DRAFTS"]))
-    local = os.environ.get("LOCALAPPDATA")
-    if local:
-        candidates.append(Path(local) / "CapCut" / "User Data" / "Projects" / "com.lveditor.draft")
-    home = Path.home()
-    candidates.append(home / "Movies" / "CapCut" / "User Data" / "Projects" / "com.lveditor.draft")
-    candidates.append(home / "AppData" / "Local" / "CapCut" / "User Data" / "Projects" / "com.lveditor.draft")
-    for c in candidates:
-        if c.is_dir():
-            return c
-    return None

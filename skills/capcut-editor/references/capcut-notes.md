@@ -15,8 +15,8 @@ location.
 Each draft folder this tool writes contains `draft_content.json` and `draft_info.json` (same timeline;
 older and newer CapCut builds read different ones), `draft_meta_info.json`, `.cappus.json` (a copy
 of the spec, which also marks the draft as one this tool made) and `.cappus-build.json` (a fingerprint
-of the timeline as built: clip timing, source ranges, speed, volume, transforms, effects, keyframes; no
-ids, so CapCut re-saving the file on open does not change it; CapCut also re-measures media lengths on
+of the timeline as built: clip timing, source ranges, speed, volume, transforms, effects, keyframes, and
+audio tools once turned on (Reduce noise, Normalize loudness, Isolate voice, channels, beat markers); no ids, so CapCut re-saving the file on open does not change it; CapCut also re-measures media lengths on
 open, so timings within 0.05 s count as unchanged). A draft with `remove_bg` clips
 also gets a `matting/` folder when CapCut first opens it. It holds CapCut's cutout masks, about
 3 MB per second of video, and CapCut rebuilds it if it is missing.
@@ -38,6 +38,13 @@ encrypts its drafts and is not supported. The mobile app does not open desktop d
    once they agree, rebuild with `--force`.
 4. CapCut must not have that draft open while you overwrite it; ask the user to go back to the
    CapCut home screen first.
+
+The old draft leaves the drafts folder in one rename, into `.cappus-replaced` next to the drafts
+folder. If any file in it is open (CapCut, OneDrive, an antivirus scan, the search indexer), the
+rename fails, the build stops with "nothing was changed", and the draft is exactly as it was; try
+again once the file is closed. Only after the new draft is written does the old one go on to the
+backups folder, by rename on the same drive or by copy from another drive. If that copy fails, the
+report says where the old version was kept.
 
 Neither flag deletes anything. The replaced version moves to `~/.cappus/backups/<name>-<time>`, and
 the build report names it under `previous_version`. The newest 5 backups per draft name are kept;

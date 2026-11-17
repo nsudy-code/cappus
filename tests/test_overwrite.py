@@ -1,12 +1,16 @@
 """Rebuilding a draft must never lose what the user changed in CapCut."""
+import errno
 import json
 import os
 import re
+import sys
 import time
 import uuid
+from pathlib import Path
 
 import pytest
 
+import build_draft
 from conftest import run
 from _common import BUILD_FILE, edit_check
 
@@ -93,6 +97,51 @@ def test_small_shift_after_a_stretched_clip_is_not_an_edit(built):
     assert edit_check(folder)["edited"] is False
 
 
+def attach(kind, material):
+    """Attach an audio-tool material to every audio clip, the way CapCut stores it."""
+    def change(data):
+        for n, t in enumerate(x for x in data["tracks"] if x["type"] == "audio"):
+            for s in t["segments"]:
+                mid = f"{kind}-{n}-{s['id']}"
+                data["materials"].setdefault(kind, []).append({"id": mid, **material})
+                s.setdefault("extra_material_refs", []).append(mid)
+    return change
+
+
+OFF_TOOLS = {  # what CapCut 9.8 attaches to every clip when it saves a draft
+    "loudnesses": {"enable": False, "time_range": None, "file_id": "", "target_loudness": 0.0, "loudness_param": None},
+    "vocal_separations": {"type": "vocal_separation", "choice": 0, "removed_sounds": [], "time_range": None,
+                          "production_path": "", "final_algorithm": "", "enter_from": ""},
+    "sound_channel_mappings": {"type": "none", "audio_channel_mapping": 0, "is_config_open": False},
+    "realtime_denoises": {"is_denoise": False, "denoise_mode": 0.0, "denoise_rate": 0.0},
+    "beats": {"user_beats": [], "enable_ai_beats": False, "ai_beats": None},
+}
+
+
+@pytest.mark.parametrize("kind", sorted(OFF_TOOLS))
+def test_audio_tools_left_off_are_not_an_edit(built, kind):
+    _, _, folder = built
+    resave(folder, attach(kind, OFF_TOOLS[kind]))
+    assert edit_check(folder)["edited"] is False
+
+
+@pytest.mark.parametrize("kind, on", [
+    ("realtime_denoises", {"is_denoise": True, "denoise_mode": 1.0, "denoise_rate": 0.5}),
+    ("loudnesses", {"enable": True, "target_loudness": -14.0}),
+    ("vocal_separations", {"choice": 1}),
+    ("sound_channel_mappings", {"type": "left", "audio_channel_mapping": 1}),
+    ("beats", {"user_beats": [1_000_000, 2_000_000]}),
+    ("beats", {"enable_ai_beats": True}),
+])
+def test_audio_tool_turned_on_is_an_edit(built, kind, on):
+    """Reduce noise, Normalize loudness, Isolate voice, channels and beat markers are the user's work."""
+    _, _, folder = built
+    resave(folder, attach(kind, {**OFF_TOOLS[kind], **on}))
+    state = edit_check(folder)
+    assert state["edited"] is True, kind
+    assert any("audio tools" in c for c in state["changes"]), state
+
+
 def test_unchanged_draft_is_replaced_and_backed_up(built, cappus_home):
     spec_path, drafts, folder = built
     resave(folder)
@@ -101,6 +150,7 @@ def test_unchanged_draft_is_replaced_and_backed_up(built, cappus_home):
     assert "previous_version" in json.loads(res.stdout)
     backups = list((cappus_home / "backups").iterdir())
     assert [b.name.startswith("t-draft-") for b in backups] == [True]
+    assert not (drafts.parent / build_draft.STAGING).exists(), "the staging folder is removed once empty"
 
 
 def test_rebuild_without_a_flag_is_refused(built):
@@ -151,3 +201,99 @@ def test_draft_from_an_older_cappus_falls_back_to_file_times(built):
     resave(folder)
     state = edit_check(folder)
     assert state["edited"] is True and "file times" in state["how"]
+
+
+def snapshot(folder):
+    return {p.relative_to(folder).as_posix(): p.read_bytes() for p in folder.rglob("*") if p.is_file()}
+
+
+def empty(folder):
+    return not folder.exists() or not any(folder.iterdir())
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="only Windows refuses to rename a folder with a file open in it")
+@pytest.mark.parametrize("flag", ["--overwrite", "--force"])
+def test_open_file_leaves_the_draft_untouched(built, cappus_home, flag):
+    """CapCut, OneDrive, an antivirus scan or the search indexer can hold a file in the draft open."""
+    spec_path, drafts, folder = built
+    before = snapshot(folder)
+    with open(folder / "draft_meta_info.json", "rb"):
+        res = rebuild(spec_path, drafts, flag)
+    assert res.returncode != 0
+    assert "nothing was changed" in res.stderr
+    assert snapshot(folder) == before
+    assert empty(cappus_home / "backups")
+    assert empty(drafts.parent / build_draft.STAGING)
+    res = rebuild(spec_path, drafts, flag)  # once the file is closed, the rebuild goes through
+    assert res.returncode == 0, res.stderr
+
+
+def test_backup_on_another_drive_is_copied_without_masks(built, cappus_home, monkeypatch):
+    _, _, folder = built
+    (folder / "matting").mkdir()
+    (folder / "matting" / "mask.bin").write_bytes(b"mask")
+    before = snapshot(folder)
+    staged = build_draft.stage_out(folder, "t-draft")
+    assert not folder.exists() and snapshot(staged) == before
+
+    real = os.rename
+
+    def rename(src, dst):
+        if Path(dst).is_relative_to(cappus_home):
+            raise OSError(errno.EXDEV, "The system cannot move the file to a different disk drive")
+        real(src, dst)
+    monkeypatch.setattr(os, "rename", rename)
+    note = build_draft.back_up(staged, "t-draft")
+    assert note.startswith("moved to "), note
+    backup = Path(note.split(" (")[0][len("moved to "):])
+    assert snapshot(backup) == {k: v for k, v in before.items() if not k.startswith("matting/")}
+    assert not staged.parent.exists()
+
+
+def test_failed_backup_keeps_the_old_draft_where_it_was_staged(built, monkeypatch):
+    _, _, folder = built
+    before = snapshot(folder)
+    staged = build_draft.stage_out(folder, "t-draft")
+
+    def fail(*args, **kwargs):
+        raise OSError(errno.ENOSPC, "No space left on device")
+    monkeypatch.setattr(os, "rename", fail)
+    monkeypatch.setattr(build_draft.shutil, "copytree", fail)
+    note = build_draft.back_up(staged, "t-draft")
+    assert note.startswith(f"kept at {staged}"), note
+    assert snapshot(staged) == before
+
+
+def test_staging_cleanup_removes_only_copied_leftovers(tmp_path):
+    drafts, root = tmp_path / "drafts", tmp_path / build_draft.STAGING
+    only_copy = root / "a-20260101-000000" / "a"
+    only_copy.mkdir(parents=True)
+    (only_copy / "draft_info.json").write_text("{}")
+    leftover = root / "b-20260101-000000" / "b"
+    leftover.mkdir(parents=True)
+    (leftover / "in-use.bin").write_bytes(b"x")
+    (leftover.parent / build_draft.COPIED).touch()
+    (drafts / "c").mkdir(parents=True)
+    build_draft.stage_out(drafts / "c", "c")
+    assert only_copy.is_dir()
+    assert not leftover.parent.exists()
+
+
+def test_failed_write_puts_the_old_draft_back(built, cappus_home, monkeypatch):
+    spec_path, drafts, folder = built
+    before = snapshot(folder)
+    spec_text = spec_path.read_text(encoding="utf-8")
+    builder = build_draft.Builder(json.loads(spec_text), spec_path.parent)
+    builder.build()
+    real = Path.write_text
+
+    def write_text(self, *args, **kwargs):
+        if self.name == "draft_meta_info.json":
+            raise OSError(errno.ENOSPC, "No space left on device")
+        return real(self, *args, **kwargs)
+    monkeypatch.setattr(Path, "write_text", write_text)
+    with pytest.raises(build_draft.SpecError, match="nothing was changed"):
+        build_draft.write_draft(builder, drafts, "t-draft", True, spec_text)
+    assert snapshot(folder) == before
+    assert empty(drafts.parent / build_draft.STAGING)
+    assert empty(cappus_home / "backups")

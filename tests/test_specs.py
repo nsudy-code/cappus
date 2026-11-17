@@ -27,7 +27,29 @@ def music(media, **item):
     return [{"src": str(media / "music.mp3"), **item}]
 
 
+def clip(m, **item):
+    return {"video": [{"src": str(m / "vertical.mp4"), **item}]}
+
+
 BAD = {
+    "clip in as a word": (lambda m: clip(m, **{"in": "abc", "duration": 3}), "video[0].in must be a number, got 'abc'"),
+    "clip out as a word": (lambda m: clip(m, out="abc"), "video[0].out must be a number, got 'abc'"),
+    "clip duration as a word": (lambda m: clip(m, duration="abc"), "video[0].duration must be a number, got 'abc'"),
+    "negative clip in": (lambda m: clip(m, **{"in": -1, "duration": 3}), "video[0].in must be at least 0, got -1"),
+    "audio in as a word": (lambda m: {"audio": music(m, **{"in": "abc"})}, "audio[0].in must be a number, got 'abc'"),
+    "audio at as a word": (lambda m: {"audio": music(m, at="abc")}, "audio[0].at: cannot parse time 'abc'"),
+    "infinite text start": (
+        lambda m: {"texts": [{"text": "hi", "at": float("inf"), "duration": 1}]},
+        "texts[0].at must be a finite number"),
+    "text duration as a word": (
+        lambda m: {"texts": [{"text": "hi", "at": 0, "duration": "abc"}]},
+        "texts[0].duration must be a number, got 'abc'"),
+    "reference offset with two dots": (
+        lambda m: {"texts": [{"text": "hi", "at": "@a+1.2.3", "duration": 1}]},
+        "texts[0].at: cannot parse time '@a+1.2.3'"),
+    "caption cue start as a word": (
+        lambda m: {"captions": {"cues": [{"start": "abc", "end": 1, "text": "hi"}]}},
+        "captions[0].cues[0].start must be a number, got 'abc'"),
     "audio keyframes without pairs": (
         lambda m: {"audio": music(m, keyframes={"volume": [0.5, 1.0]})},
         "audio[0].keyframes.volume: each point is [seconds_from_item_start, value], got 0.5"),
