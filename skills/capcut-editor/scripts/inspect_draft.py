@@ -16,21 +16,11 @@ import json
 import sys
 from pathlib import Path
 
-from _common import find_drafts_dir
+from _common import MARKER, edit_check, find_drafts_dir, newest_timeline
 
-
-def load(folder: Path):
-    """The timeline file CapCut saved last: 8.x re-saves draft_content.json and leaves draft_info.json
-    as the tool wrote it, other builds do the reverse."""
-    files = [p for name in ("draft_info.json", "draft_content.json")
-             for p in [folder / name] + sorted(folder.glob(f"Timelines/*/{name}")) if p.is_file()]
-    if not files:
-        return None, None
-    p = max(files, key=lambda f: f.stat().st_mtime)
-    try:
-        return p, json.loads(p.read_bytes().decode("utf-8-sig"))
-    except (UnicodeDecodeError, json.JSONDecodeError):
-        return p, None
+# The timeline file CapCut saved last: 8.x re-saves draft_content.json and leaves draft_info.json as
+# the tool wrote it, 9.x writes Timelines/<id>/draft_content.json, other builds do the reverse.
+load = newest_timeline
 
 
 def summarize(data: dict) -> dict:
@@ -96,7 +86,7 @@ def main() -> int:
         for d in sorted(drafts.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
             if d.is_dir() and not d.name.startswith("."):
                 path, _ = load(d)
-                tag = "built-by-tool" if (d / ".cappus.json").exists() else ("" if path else "no timeline file")
+                tag = "built-by-tool" if (d / MARKER).exists() else ("" if path else "no timeline file")
                 rows.append(f"{d.name}  {tag}".rstrip())
         print("\n".join(rows) or "(no drafts)")
         return 0
@@ -116,13 +106,13 @@ def main() -> int:
         return 1
     report = summarize(data)
     report["file"] = str(path)
-    spec_file = folder / ".cappus.json"
+    spec_file = folder / MARKER
     if spec_file.exists():
-        timeline_files = [p for p in folder.rglob("*.json")
-                          if p.name in ("draft_info.json", "draft_content.json")]
-        newest = max(p.stat().st_mtime for p in timeline_files)
-        modified = newest - spec_file.stat().st_mtime > 5
-        report["edited_in_capcut_since_build"] = modified
+        state = edit_check(folder)
+        report["edited_in_capcut_since_build"] = state["edited"]
+        report["edit_check"] = state["how"]
+        if state.get("changes"):
+            report["changes_in_capcut"] = state["changes"]
         if args.diff:
             report["built_from_spec"] = json.loads(spec_file.read_text(encoding="utf-8"))
     print(json.dumps(report, ensure_ascii=False, indent=1))

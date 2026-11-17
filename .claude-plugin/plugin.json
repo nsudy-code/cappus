@@ -1,6 +1,6 @@
 {
   "name": "cappus",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Edit videos into editable CapCut desktop drafts: real CapCut transitions, effects, filters, animations, keyframes and word-by-word captions transcribed from the speech, all adjustable on the CapCut timeline. Works with free CapCut and CapCut Pro.",
   "author": {"name": "nsudy-code"},
   "homepage": "https://github.com/nsudy-code/cappus",

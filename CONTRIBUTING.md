@@ -49,9 +49,24 @@ For a larger change, open an issue first so we can agree on the approach before 
 
 ## Testing your change
 
-There is no automated test suite yet. Before you open a pull request:
+Run the test suite. GitHub Actions runs the same tests on every push and pull request, on Linux and
+Windows:
 
-- Run both demo checks above. Each must report `"status": "valid ..."`.
+```bash
+python -m pip install pytest
+```
+
+```bash
+python -m pytest tests
+```
+
+The tests check that every alias, every `unavailable.json` entry and every palette name in
+`references/editing-craft.md` exists in the CapCut catalog, that both demos validate, that bad specs get
+a clear message instead of a traceback, and that a rebuild never replaces a draft the user changed in
+CapCut without `--force`. They need ffmpeg and the demo media from `examples/make_test_media.py`.
+
+Before you open a pull request, also:
+
 - If your change affects what goes into a draft, build the demo, open it in CapCut, and play it
   through. Note your CapCut version (Settings > About) and operating system in the pull request.
 - If you changed `SKILL.md` or a reference file, try a real request in a new Claude Code session

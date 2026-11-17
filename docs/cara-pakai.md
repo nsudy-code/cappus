@@ -51,7 +51,8 @@ python -m pip install "pycapcut==0.0.4" numpy
 ```
 
 Perintah ini memasang `pycapcut` (penulis draft CapCut) dan `numpy` (analisis beat lagu). Kalau
-belum terpasang, Claude juga akan memasangnya saat pertama kali dipakai.
+belum terpasang, Claude juga akan memasangnya saat pertama kali dipakai. Di macOS dan kebanyakan
+Linux, perintahnya `python3` (`python3 -m pip install ...`), juga untuk semua perintah di panduan ini.
 
 **Opsional, untuk caption otomatis dari suara:**
 
@@ -220,9 +221,12 @@ Tulis saja apa yang ingin diubah, misalnya:
 Claude mengubah spec lalu membangun ulang draft. Beberapa hal yang perlu diketahui:
 
 - **Kembali ke halaman utama CapCut** (jangan biarkan draft itu terbuka) sebelum Claude menulis ulang.
-- **Perubahan manual Anda di CapCut bisa hilang.** Membangun ulang mengganti seluruh isi draft. Claude
-  memeriksa dulu apakah draft sudah Anda ubah di CapCut. Kalau sudah, Claude akan bertanya, atau
-  membuat draft baru dengan nama lain (misalnya "... v2") supaya versi Anda tetap ada.
+- **Perubahan manual Anda di CapCut aman.** Setiap build mencatat sidik timeline. Kalau Anda sudah
+  mengubah draft di CapCut (sekadar membuka dan memutar tidak dihitung), build ulang berhenti dan
+  Claude bertanya dulu: buat draft baru dengan nama lain (misalnya "... v2") supaya keduanya ada,
+  atau ganti versi Anda.
+- **Versi yang diganti tidak dihapus.** Ia dipindah ke `~/.cappus/backups/<nama>-<waktu>`; 5 terbaru
+  per draft disimpan. Cara memulihkannya ada di bagian perintah `build_draft.py` di bawah.
 - Claude hanya pernah menimpa draft yang dibuatnya sendiri. Proyek CapCut Anda yang lain tidak akan
   tersentuh.
 
@@ -393,7 +397,13 @@ python skills/capcut-editor/scripts/build_draft.py spec.json
 
 `--check` hanya memvalidasi dan menampilkan timeline tanpa menulis apa pun. Opsi lain:
 
-- `--overwrite` menimpa draft yang sebelumnya dibuat alat ini;
+- `--overwrite` menimpa draft yang sebelumnya dibuat alat ini, tapi hanya kalau draft itu belum
+  diubah di CapCut sejak dibuat (sekadar membuka dan memutar tidak dihitung). Kalau sudah diubah,
+  build berhenti dan menyebutkan apa yang berubah;
+- `--force` tetap menimpa walau draft sudah diubah. Pakai hanya setelah pemiliknya setuju;
+- dengan kedua opsi itu, versi lama tidak dihapus. Ia dipindah ke `~/.cappus/backups/<nama>-<waktu>`
+  (5 terbaru per draft disimpan). Untuk memulihkannya, tutup draft di CapCut, pindahkan folder draft
+  yang sekarang keluar, lalu pindahkan folder cadangan ke folder draft CapCut dengan nama aslinya;
 - `--drafts-dir <folder>` dipakai kalau lokasi draft CapCut bukan bawaan;
 - `--allow-pro` atau `--free-only` memaksa izinkan atau tolak efek Pro untuk build itu saja.
   Tanpa opsi ini, yang dipakai adalah `allow_pro` di spec, lalu tier pengguna.

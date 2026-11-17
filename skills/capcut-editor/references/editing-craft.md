@@ -129,7 +129,7 @@ All names below are aliases from the catalog (free). Search for more with `catal
 
 | mood | transitions | scene effects | filters | text animations |
 |---|---|---|---|---|
-| Hype / energetic | `white_flash`, `whip_horizontal`, `glitch`, `shake`, `zoom` style intros (`dynamic_zoom_in`) | `shake`, `flash_white`, `strobe`, `chromatic_glitch`, `beat_shots`, `repeat_zoom` | `vivid`, `high_saturation`, `cyberpunk` | `punch_in`, `zoom_in`, `glitch`, loop `word_pop` |
+| Hype / energetic | `white_flash`, `whip_horizontal`, `glitch`, `shake`, zoom-style intros (`dynamic_zoom_in`) | `shake`, `flash_white`, `strobe`, `chromatic_glitch`, `beat_shots`, `repeat_zoom` | `vivid`, `high_saturation`, `cyberpunk` | `punch_in`, `zoom_in`, `glitch`, loop `word_pop` |
 | Clean / modern | `slide_left`, `push_left`, `wipe_left`, `blur` | `slight_zoom`, `light_shake` (low) | `clear`, `natural`, `cool` | `slide_up`, `fade_in`, `reveal_up`, `dissolve_in` |
 | Cinematic | `dissolve`, `fade_black`, `blur`, `light_beam` | `cinematic_bars`, `film`, `noise` (low), `film_leak`, `vignette` | `teal_orange`, `gold200`, `dunkirk`, `kraft` | `fade_in`, `blur_in`, letter-spaced titles |
 | Retro / nostalgic | `old_film`, `retro_projector`, `memory`, `shutter` | `retro_dv`, `dv_texture`, `bw_vhs`, `old_photo`, `70s`, `1998`, `tv_on` | `vhs`, `1980`, `retro`, `sepia`, `silent_film` | `typewriter`, `flicker` |

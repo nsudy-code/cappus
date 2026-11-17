@@ -99,7 +99,9 @@ Use one option, not both. With both, Claude sees the skill twice.
 python -m pip install "pycapcut==0.0.4" numpy
 ```
 
-From a clone you can run `python -m pip install -r skills/capcut-editor/requirements.txt` instead.
+On macOS and most Linux systems the command is `python3` (`python3 -m pip install ...`), here and in
+every command below. From a clone you can run
+`python -m pip install -r skills/capcut-editor/requirements.txt` instead.
 `pycapcut` writes the draft files, and `numpy` is used for beat detection. If they are missing,
 Claude installs them on first use.
 
@@ -191,8 +193,12 @@ Ask for changes in the same way: "make the title smaller", "swap the second and 
 "less saturated". Claude edits the spec and rebuilds the draft.
 
 - Claude only overwrites drafts that cappus created. Your other CapCut projects are never touched.
-- Before rebuilding, Claude checks whether you edited the draft in CapCut. If you did, it asks
-  before overwriting, or saves the new version under a different name.
+- Each build records a fingerprint of the timeline. If you changed the draft in CapCut since then
+  (opening and playing it does not count), the rebuild stops and Claude asks you first: keep both
+  under different names, or replace yours.
+- A replaced version is never deleted. It moves to `~/.cappus/backups/<name>-<time>`; the newest 5
+  per draft are kept. To restore one, close it in CapCut, move the current draft folder out, and
+  move the backup into CapCut's drafts folder under the original name.
 - Close the draft in CapCut (return to the home screen) before a rebuild.
 
 ## Finishing in CapCut

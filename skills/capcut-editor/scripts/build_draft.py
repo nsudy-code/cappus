@@ -3,8 +3,11 @@
 
   build_draft.py spec.json --check          # validate only, print the timeline
   build_draft.py spec.json                  # write the draft into CapCut's draft folder
-  build_draft.py spec.json --overwrite      # replace a draft previously written by this tool
+  build_draft.py spec.json --overwrite      # replace a draft this tool wrote, if unchanged in CapCut
+  build_draft.py spec.json --force          # replace it even though the user edited it in CapCut
   build_draft.py spec.json --drafts-dir D   # write somewhere else
+
+A replaced draft is moved to ~/.cappus/backups/<name>-<time> (the newest 5 per name are kept).
 
 CapCut Pro resources are allowed when, in order of precedence: --allow-pro / --free-only is
 given, else the spec's "allow_pro", else the user's saved plan (tier.py pro). Otherwise free only.
@@ -24,12 +27,12 @@ import time
 import uuid
 from pathlib import Path
 
-from _common import SpecError, cc, find_drafts_dir, label, param_names, resolve, user_tier
+from _common import (BACKUPS_KEPT, BUILD_FILE, MARKER, SpecError, backups_dir, cc, edit_check, find_drafts_dir,
+                     label, param_names, resolve, signature_hash, timeline_signature, user_tier)
 
 from pycapcut import assets as cc_assets
 from pycapcut.script_file import ScriptFile
 
-MARKER = ".cappus.json"
 BLUR_LEVELS = {1: 0.0625, 2: 0.375, 3: 0.75, 4: 1.0}
 # CapCut replaces this token with the draft's own folder when it reads a path.
 DRAFT_DIR_TOKEN = "##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80_##"
@@ -63,6 +66,7 @@ FILTER_KEYS = {"name", "at", "end", "duration", "intensity", "track", "note"}
 STICKER_KEYS = {"resource_id", "at", "end", "duration", "transform", "track", "keyframes", "note"}
 TOP_KEYS = {"name", "width", "height", "fps", "allow_pro", "styles", "video", "overlays", "audio",
             "texts", "captions", "effects", "filters", "stickers", "note"}
+LIST_KEYS = ("video", "overlays", "audio", "texts", "effects", "filters", "stickers")
 
 KF_PROPS = {
     "x": cc.KeyframeProperty.position_x,
@@ -127,6 +131,58 @@ def matting_json(media_path: str) -> dict:
     }
 
 
+def num(value, ctx, lo=None, hi=None, above=None) -> float:
+    """A number from the spec, checked against the range CapCut accepts."""
+    if isinstance(value, bool):
+        raise SpecError(f"{ctx} must be a number, got {value!r}")
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        raise SpecError(f"{ctx} must be a number, got {value!r}")
+    if v != v or v in (float("inf"), float("-inf")):
+        raise SpecError(f"{ctx} must be a finite number, got {value!r}")
+    if above is not None and v <= above:
+        raise SpecError(f"{ctx} must be more than {above:g}, got {v:g}")
+    if lo is not None and v < lo:
+        raise SpecError(f"{ctx} must be at least {lo:g}, got {v:g}")
+    if hi is not None and v > hi:
+        raise SpecError(f"{ctx} must be at most {hi:g}, got {v:g}")
+    return v
+
+
+def as_list(value, ctx) -> list:
+    """A list from the spec. A single name or object is taken as a one-item list."""
+    if value is None:
+        return []
+    if isinstance(value, (str, dict)):
+        return [value]
+    if isinstance(value, list):
+        return value
+    raise SpecError(f"{ctx} must be a list, got {type(value).__name__}")
+
+
+def points(value, ctx, minimum=2) -> list:
+    """Keyframe points: [[seconds, value], ...]."""
+    if not isinstance(value, list):
+        raise SpecError(f"{ctx} must be a list of [time, value] points, e.g. [[0, 1.0], [2.5, 0.3]], "
+                        f"got {type(value).__name__}")
+    if len(value) < minimum:
+        raise SpecError(f"{ctx}: need at least {minimum} [time, value] point(s), e.g. [[0, 1.0], [2.5, 0.3]]")
+    for pt in value:
+        if not (isinstance(pt, (list, tuple)) and len(pt) == 2):
+            raise SpecError(f"{ctx}: each point is [seconds_from_item_start, value], got {pt!r}")
+    return value
+
+
+# Value ranges per keyframe property (lo, hi, above).
+KF_RANGES = {"opacity": (0, 1, None), "volume": (0, None, None), "scale": (None, None, 0),
+             "scale_x": (None, None, 0), "scale_y": (None, None, 0), "saturation": (-1, 1, None),
+             "contrast": (-1, 1, None), "brightness": (-1, 1, None)}
+# Errors one spec item can raise; each is reported and the build moves on to the next item.
+ITEM_ERRORS = (SpecError, ValueError, TypeError, KeyError, IndexError, AttributeError)
+FPS_RATES = (24, 25, 30, 50, 60)
+
+
 def named(value, ctx):
     """Accept "name" or {"name": ..., ...}; return a dict."""
     if isinstance(value, str):
@@ -138,7 +194,16 @@ def named(value, ctx):
 
 class Builder:
     def __init__(self, spec: dict, base_dir: Path, allow_pro=None):
+        if not isinstance(spec, dict):
+            raise SpecError(f"the spec must be a JSON object ({{\"video\": [...], ...}}), got {type(spec).__name__}")
         check_keys(spec, TOP_KEYS, "spec")
+        for key in LIST_KEYS:
+            if spec.get(key) is not None and not isinstance(spec[key], list):
+                raise SpecError(f"spec.{key} must be a list ([...]), got {type(spec[key]).__name__}")
+        if spec.get("styles") is not None and not isinstance(spec["styles"], dict):
+            raise SpecError("spec.styles must be an object of named styles")
+        if spec.get("captions") is not None and not isinstance(spec["captions"], (dict, list)):
+            raise SpecError("spec.captions must be an object, or a list of them")
         self.spec = spec
         self.base = base_dir
         if allow_pro is not None:
@@ -150,12 +215,17 @@ class Builder:
             self.allow_pro = tier == "pro"
             self.pro_source = f"user plan: {tier}" if tier else "user plan not set (tier.py), free only"
         self.allow_unavailable = False  # check_resources.py turns this on to re-test blocked items
-        self.width = int(spec.get("width", 1080))
-        self.height = int(spec.get("height", 1920))
-        self.fps = int(spec.get("fps", 30))
-        self.script = ScriptFile(self.width, self.height, self.fps)
         self.errors: list = []
         self.warnings: list = []
+        self.width = int(num(spec.get("width", 1080), "spec.width", lo=16, hi=8192))
+        self.height = int(num(spec.get("height", 1920), "spec.height", lo=16, hi=8192))
+        fps = num(spec.get("fps", 30), "spec.fps", above=0)
+        # CapCut projects run at whole rates; 29.97 / 59.94 / 23.976 footage plays fine on the nearest one.
+        self.fps = min(FPS_RATES, key=lambda r: abs(r - fps))
+        if abs(self.fps - fps) > 0.01:
+            self.warnings.append(f"spec.fps {fps:g} is not a CapCut project rate; using {self.fps} "
+                                 f"(CapCut offers {', '.join(map(str, FPS_RATES))})")
+        self.script = ScriptFile(self.width, self.height, self.fps)
         self.pro_used: list = []
         self.used: dict = {}
         self.clips: dict = {}       # id -> (start_us, end_us)
@@ -168,6 +238,13 @@ class Builder:
         self.styles = spec.get("styles", {}) or {}
 
     # ---------- helpers ----------
+    def fail(self, ctx, e):
+        """Record a problem with one spec item; the build carries on so all problems show at once."""
+        msg = str(e)
+        if not isinstance(e, (SpecError, ValueError)):
+            msg = f"malformed value ({type(e).__name__}: {e}); check this item against references/edit-spec.md"
+        self.errors.append(msg if msg.startswith(ctx) else f"{ctx}: {msg}")
+
     def res(self, kind, name):
         member = resolve(kind, name, self.allow_pro, self.allow_unavailable)
         if getattr(member.value, "is_vip", False):
@@ -331,20 +408,20 @@ class Builder:
         tr = tr or {}
         check_keys(tr, {"scale", "scale_x", "scale_y", "x", "y", "rotation", "opacity", "flip_h", "flip_v"},
                    f"{ctx}.transform")
-        s = float(tr.get("scale", 1.0))
+        c = f"{ctx}.transform"
+        s = num(tr.get("scale", 1.0), f"{c}.scale", above=0)
         return cc.ClipSettings(
-            alpha=float(tr.get("opacity", 1.0)),
+            alpha=num(tr.get("opacity", 1.0), f"{c}.opacity", lo=0, hi=1),
             flip_horizontal=bool(tr.get("flip_h", False)), flip_vertical=bool(tr.get("flip_v", False)),
-            rotation=float(tr.get("rotation", 0.0)),
-            scale_x=float(tr.get("scale_x", s)) * base, scale_y=float(tr.get("scale_y", s)) * base,
-            transform_x=float(tr.get("x", 0.0)), transform_y=float(tr.get("y", 0.0)),
+            rotation=num(tr.get("rotation", 0.0), f"{c}.rotation"),
+            scale_x=num(tr.get("scale_x", s), f"{c}.scale_x", above=0) * base,
+            scale_y=num(tr.get("scale_y", s), f"{c}.scale_y", above=0) * base,
+            transform_x=num(tr.get("x", 0.0), f"{c}.x"), transform_y=num(tr.get("y", 0.0), f"{c}.y"),
         )
 
     def source_range(self, c, mat_duration, is_photo, ctx):
         """Return (source_start, source_dur, speed)."""
-        speed = float(c.get("speed", 1.0))
-        if speed <= 0:
-            raise SpecError(f"{ctx}: speed must be > 0")
+        speed = num(c.get("speed", 1.0), f"{ctx}.speed", lo=0.1, hi=100)
         if is_photo:
             return 0, us(c.get("duration", 3.0)), 1.0
         tin = us(c.get("in", 0))
@@ -380,17 +457,16 @@ class Builder:
             c = dict(c, duration=forced_dur / 1_000_000)
         tin, sdur, speed = self.source_range(c, mat.duration, photo, ctx)
         base = self.fit_scale(mat, c.get("fit"))
+        volume = 0.0 if c.get("mute") else num(c.get("volume", 1.0), f"{ctx}.volume", lo=0)
         seg = cc.VideoSegment(
             mat, cc.Timerange(start, int(round(sdur / speed))),
-            source_timerange=cc.Timerange(tin, sdur), speed=speed,
-            volume=0.0 if c.get("mute") else float(c.get("volume", 1.0)),
+            source_timerange=cc.Timerange(tin, sdur), speed=speed, volume=volume,
             clip_settings=self.clip_settings(c.get("transform"), base, ctx),
         )
         seg._base = base
         seg._mat = mat
         if not photo:
-            self.heard(self.path(c.get("src"), ctx), tin, sdur, speed, start,
-                       0.0 if c.get("mute") else float(c.get("volume", 1.0)))
+            self.heard(self.path(c.get("src"), ctx), tin, sdur, speed, start, volume)
         return seg
 
     def keyframes(self, seg, kf, ctx, base=1.0, allowed=None):
@@ -399,19 +475,16 @@ class Builder:
         if not isinstance(kf, dict):
             raise SpecError(f"{ctx}.keyframes must be an object like {{\"scale\": [[0, 1.0], [2.5, 1.15]]}}")
         dur = seg.duration
-        for prop, points in kf.items():
+        for prop, pts in kf.items():
             if prop not in KF_PROPS or (allowed and prop not in allowed):
                 raise SpecError(f"{ctx}.keyframes: unsupported property '{prop}'. Allowed: {sorted(allowed or KF_PROPS)}")
-            if not isinstance(points, list) or len(points) < 2:
-                raise SpecError(f"{ctx}.keyframes.{prop}: need at least two [time, value] points")
-            for pt in points:
-                if not (isinstance(pt, (list, tuple)) and len(pt) == 2):
-                    raise SpecError(f"{ctx}.keyframes.{prop}: each point is [seconds_from_clip_start, value]")
-                off = us(pt[0])
+            lo, hi, above = KF_RANGES.get(prop, (None, None, None))
+            for pt in points(pts, f"{ctx}.keyframes.{prop}"):
+                off = us(num(pt[0], f"{ctx}.keyframes.{prop} time"))
                 if off < 0:
                     off += dur  # negative = measured back from the clip end
                 off = max(0, min(dur, off))
-                val = float(pt[1])
+                val = num(pt[1], f"{ctx}.keyframes.{prop} value", lo=lo, hi=hi, above=above)
                 if prop in ("scale", "scale_x", "scale_y"):
                     val *= base
                 seg.add_keyframe(KF_PROPS[prop], off, val)
@@ -419,7 +492,7 @@ class Builder:
     def motion_keyframes(self, motion, dur, ctx) -> dict:
         m = motion if isinstance(motion, dict) else {"type": motion}
         check_keys(m, {"type", "amount"}, f"{ctx}.motion")
-        kind, a = m.get("type"), float(m.get("amount", 0.12))
+        kind, a = m.get("type"), num(m.get("amount", 0.12), f"{ctx}.motion.amount", lo=0, hi=1)
         if kind not in MOTIONS:
             raise SpecError(f"{ctx}.motion: unknown type {kind!r}. Options: {sorted(MOTIONS)}")
         d = dur / 1_000_000
@@ -449,8 +522,8 @@ class Builder:
         if c.get("filter"):
             f = named(c["filter"], f"{ctx}.filter")
             check_keys(f, {"name", "intensity"}, f"{ctx}.filter")
-            seg.add_filter(self.res("filter", f["name"]), float(f.get("intensity", 100)))
-        for i, e in enumerate(c.get("effects") or []):
+            seg.add_filter(self.res("filter", f["name"]), num(f.get("intensity", 100), f"{ctx}.filter.intensity", lo=0, hi=100))
+        for i, e in enumerate(as_list(c.get("effects"), f"{ctx}.effects")):
             e = named(e, f"{ctx}.effects[{i}]")
             check_keys(e, {"name", "params"}, f"{ctx}.effects[{i}]")
             member = self.res_effect(e["name"])
@@ -459,13 +532,16 @@ class Builder:
             m = c["mask"]
             check_keys(m, {"type", "x", "y", "size", "rotation", "feather", "invert", "width", "round"}, f"{ctx}.mask")
             mtype = self.res("mask", m.get("type", "circle"))
-            kwargs = dict(center_x=float(m.get("x", 0)) * seg._mat.width / 2,
-                          center_y=float(m.get("y", 0)) * seg._mat.height / 2,
-                          size=float(m.get("size", 0.5)), rotation=float(m.get("rotation", 0)),
-                          feather=float(m.get("feather", 0)), invert=bool(m.get("invert", False)))
+            mc = f"{ctx}.mask"
+            kwargs = dict(center_x=num(m.get("x", 0), f"{mc}.x") * seg._mat.width / 2,
+                          center_y=num(m.get("y", 0), f"{mc}.y") * seg._mat.height / 2,
+                          size=num(m.get("size", 0.5), f"{mc}.size", above=0),
+                          rotation=num(m.get("rotation", 0), f"{mc}.rotation"),
+                          feather=num(m.get("feather", 0), f"{mc}.feather", lo=0, hi=100),
+                          invert=bool(m.get("invert", False)))
             if mtype == cc.MaskType.矩形:
-                kwargs["rect_width"] = float(m.get("width", m.get("size", 0.5)))
-                kwargs["round_corner"] = float(m.get("round", 0))
+                kwargs["rect_width"] = num(m.get("width", m.get("size", 0.5)), f"{mc}.width", above=0)
+                kwargs["round_corner"] = num(m.get("round", 0), f"{mc}.round", lo=0, hi=100)
             elif "width" in m or "round" in m:
                 raise SpecError(f"{ctx}.mask: 'width' and 'round' only apply to the rectangle mask")
             seg.add_mask(mtype, **kwargs)
@@ -476,7 +552,8 @@ class Builder:
             check_keys(ch, {"color", "intensity", "shadow"}, f"{ctx}.chroma")
             rgb = hex_rgb(ch.get("color", "#00FF00"), f"{ctx}.chroma.color")
             color = "#" + "".join(f"{int(round(v * 255)):02x}" for v in rgb) + "ff"
-            seg.add_chroma(color, float(ch.get("intensity", 20)), float(ch.get("shadow", 0)))
+            seg.add_chroma(color, num(ch.get("intensity", 20), f"{ctx}.chroma.intensity", lo=0, hi=100),
+                           num(ch.get("shadow", 0), f"{ctx}.chroma.shadow", lo=0, hi=100))
         if c.get("background") is not None:
             if not is_main:
                 raise SpecError(f"{ctx}: background fill only works on main-track clips")
@@ -492,7 +569,8 @@ class Builder:
         if c.get("fade"):
             fd = c["fade"]
             check_keys(fd, {"in", "out"}, f"{ctx}.fade")
-            seg.add_fade(us(fd.get("in", 0)), us(fd.get("out", 0)))
+            seg.add_fade(us(num(fd.get("in", 0), f"{ctx}.fade.in", lo=0)),
+                         us(num(fd.get("out", 0), f"{ctx}.fade.out", lo=0)))
         kf = dict(c.get("keyframes") or {})
         if c.get("motion"):
             for prop, pts in self.motion_keyframes(c["motion"], dur, ctx).items():
@@ -534,8 +612,8 @@ class Builder:
                 segs.append((seg, c, ctx))
                 self.register(c, "clip", cursor, seg.duration, track, Path(seg._mat.path).name)
                 cursor += seg.duration
-            except (SpecError, ValueError) as e:
-                self.errors.append(str(e) if str(e).startswith(ctx) else f"{ctx}: {e}")
+            except ITEM_ERRORS as e:
+                self.fail(ctx, e)
         self.main_end = cursor
         for n, (seg, c, ctx) in enumerate(segs):
             try:
@@ -553,8 +631,8 @@ class Builder:
                         d = limit
                     seg.add_transition(member, duration=d)
                 self.script.add_segment(seg, track)
-            except (SpecError, ValueError) as e:
-                self.errors.append(str(e) if str(e).startswith(ctx) else f"{ctx}: {e}")
+            except ITEM_ERRORS as e:
+                self.fail(ctx, e)
 
     def build_overlays(self):
         for i, c in enumerate(self.spec.get("overlays") or []):
@@ -572,8 +650,8 @@ class Builder:
                 track = self.place(cc.TrackType.video, c.get("track", "overlay"), seg.target_timerange)
                 self.script.add_segment(seg, track)
                 self.register(c, "overlay", start, seg.duration, track, Path(seg._mat.path).name)
-            except (SpecError, ValueError) as e:
-                self.errors.append(str(e) if str(e).startswith(ctx) else f"{ctx}: {e}")
+            except ITEM_ERRORS as e:
+                self.fail(ctx, e)
 
     # ---------- audio ----------
     def build_audio(self):
@@ -583,7 +661,7 @@ class Builder:
                 check_keys(a, AUDIO_KEYS, ctx)
                 mat = self.amat(a.get("src"), ctx)
                 start = self.t(a.get("at", 0), f"{ctx}.at")
-                speed = float(a.get("speed", 1.0))
+                speed = num(a.get("speed", 1.0), f"{ctx}.speed", lo=0.1, hi=100)
                 tin = us(a.get("in", 0))
                 if "end" in a:
                     tout = tin + int(round((self.t(a["end"], f"{ctx}.end") - start) * speed))
@@ -601,15 +679,16 @@ class Builder:
                     tout = mat.duration
                 if tin < 0 or tout <= tin:
                     raise SpecError(f"{ctx}: invalid source range in={sec(tin)}s out={sec(tout)}s")
-                vol = float(a.get("volume", 1.0))
+                vol = num(a.get("volume", 1.0), f"{ctx}.volume", lo=0)
                 seg = cc.AudioSegment(mat, cc.Timerange(start, int(round((tout - tin) / speed))),
                                       source_timerange=cc.Timerange(tin, tout - tin), speed=speed, volume=vol)
                 self.heard(self.path(a.get("src"), ctx), tin, tout - tin, speed, start, vol)
                 dur = seg.duration
                 if a.get("fade"):
                     check_keys(a["fade"], {"in", "out"}, f"{ctx}.fade")
-                    seg.add_fade(us(a["fade"].get("in", 0)), us(a["fade"].get("out", 0)))
-                for j, e in enumerate(a.get("effects") or []):
+                    seg.add_fade(us(num(a["fade"].get("in", 0), f"{ctx}.fade.in", lo=0)),
+                                 us(num(a["fade"].get("out", 0), f"{ctx}.fade.out", lo=0)))
+                for j, e in enumerate(as_list(a.get("effects"), f"{ctx}.effects")):
                     e = named(e, f"{ctx}.effects[{j}]")
                     check_keys(e, {"name", "params"}, f"{ctx}.effects[{j}]")
                     try:
@@ -620,25 +699,36 @@ class Builder:
                         except SpecError:
                             raise first
                     seg.add_effect(member, self.params(member, e.get("params"), f"{ctx}.effects[{j}]"))
-                points = []
+                marks = []
                 kf = a.get("keyframes") or {}
+                if not isinstance(kf, dict):
+                    raise SpecError(f"{ctx}.keyframes must be an object like {{\"volume\": [[0, 1.0], [2, 0.3]]}}")
                 if set(kf) - {"volume"}:
                     raise SpecError(f"{ctx}.keyframes: audio only supports 'volume'")
-                for pt in kf.get("volume", []):
-                    off = us(pt[0])
-                    points.append((off + dur if off < 0 else off, float(pt[1])))
+                if "volume" in kf:
+                    for pt in points(kf["volume"], f"{ctx}.keyframes.volume", minimum=1):
+                        off = us(num(pt[0], f"{ctx}.keyframes.volume time"))
+                        marks.append((off + dur if off < 0 else off,
+                                       num(pt[1], f"{ctx}.keyframes.volume value", lo=0)))
                 if a.get("duck"):
                     dk = a["duck"]
                     check_keys(dk, {"ranges", "to", "ramp"}, f"{ctx}.duck")
-                    low, ramp = float(dk.get("to", 0.2)) * vol, us(dk.get("ramp", 0.25))
-                    for r in dk.get("ranges", []):
-                        s0 = self.t(r[0], f"{ctx}.duck") - start
-                        e0 = self.t(r[1], f"{ctx}.duck") - start
+                    low = num(dk.get("to", 0.2), f"{ctx}.duck.to", lo=0) * vol
+                    ramp = us(num(dk.get("ramp", 0.25), f"{ctx}.duck.ramp", lo=0))
+                    ranges = dk.get("ranges", [])
+                    if not isinstance(ranges, list):
+                        raise SpecError(f"{ctx}.duck.ranges must be a list of [start, end] pairs")
+                    for k, r in enumerate(ranges):
+                        rc = f"{ctx}.duck.ranges[{k}]"
+                        if not (isinstance(r, (list, tuple)) and len(r) == 2):
+                            raise SpecError(f"{rc}: each range is [start, end], e.g. [\"@talk\", \"@talk.end\"]; got {r!r}")
+                        s0 = self.t(r[0], rc) - start
+                        e0 = self.t(r[1], rc) - start
                         if e0 <= 0 or s0 >= dur:
                             continue
-                        points += [(s0 - ramp, vol), (s0, low), (e0, low), (e0 + ramp, vol)]
+                        marks += [(s0 - ramp, vol), (s0, low), (e0, low), (e0 + ramp, vol)]
                 last = -1
-                for off, val in sorted(points):
+                for off, val in sorted(marks):
                     off = max(0, min(dur, off))
                     if off <= last:
                         continue
@@ -647,8 +737,8 @@ class Builder:
                 track = self.place(cc.TrackType.audio, a.get("track", "audio"), seg.target_timerange)
                 self.script.add_segment(seg, track)
                 self.register(a, "audio", start, dur, track, Path(mat.path).name)
-            except (SpecError, ValueError) as e:
-                self.errors.append(str(e) if str(e).startswith(ctx) else f"{ctx}: {e}")
+            except ITEM_ERRORS as e:
+                self.fail(ctx, e)
 
     # ---------- text ----------
     def style_of(self, item, ctx) -> dict:
@@ -669,38 +759,51 @@ class Builder:
         if align is None:
             raise SpecError(f"{ctx}: align must be left, center or right")
         wrap = st.get("wrap", 0.82)
+        if wrap is True:
+            wrap = 0.82
+        wrap = num(wrap, f"{ctx}.wrap", above=0, hi=1) if wrap else 0
         style = cc.TextStyle(
-            size=float(st.get("size", 8)), bold=bool(st.get("bold", False)), italic=bool(st.get("italic", False)),
+            size=num(st.get("size", 8), f"{ctx}.size", above=0),
+            bold=bool(st.get("bold", False)), italic=bool(st.get("italic", False)),
             underline=bool(st.get("underline", False)), color=hex_rgb(st.get("color", "#FFFFFF"), f"{ctx}.color"),
-            alpha=float(st.get("opacity", 1.0)), align=align, vertical=bool(st.get("vertical", False)),
-            letter_spacing=int(st.get("letter_spacing", 0)), line_spacing=int(st.get("line_spacing", 0)),
-            auto_wrapping=bool(wrap), max_line_width=float(wrap or 0.82),
+            alpha=num(st.get("opacity", 1.0), f"{ctx}.opacity", lo=0, hi=1), align=align,
+            vertical=bool(st.get("vertical", False)),
+            letter_spacing=int(num(st.get("letter_spacing", 0), f"{ctx}.letter_spacing")),
+            line_spacing=int(num(st.get("line_spacing", 0), f"{ctx}.line_spacing")),
+            auto_wrapping=bool(wrap), max_line_width=wrap or 0.82,
         )
         border = shadow = background = None
         if st.get("stroke"):
             b = st["stroke"]
             check_keys(b, {"color", "width", "opacity"}, f"{ctx}.stroke")
-            border = cc.TextBorder(alpha=float(b.get("opacity", 1)), color=hex_rgb(b.get("color", "#000000")),
-                                   width=float(b.get("width", 40)))
+            border = cc.TextBorder(alpha=num(b.get("opacity", 1), f"{ctx}.stroke.opacity", lo=0, hi=1),
+                                   color=hex_rgb(b.get("color", "#000000"), f"{ctx}.stroke.color"),
+                                   width=num(b.get("width", 40), f"{ctx}.stroke.width", lo=0, hi=100))
         if st.get("shadow"):
-            s = st["shadow"]
-            check_keys(s, {"color", "opacity", "blur", "distance", "angle"}, f"{ctx}.shadow")
-            shadow = cc.TextShadow(alpha=float(s.get("opacity", 0.8)), color=hex_rgb(s.get("color", "#000000")),
-                                   diffuse=float(s.get("blur", 15)), distance=float(s.get("distance", 5)),
-                                   angle=float(s.get("angle", -45)))
+            sh = st["shadow"]
+            check_keys(sh, {"color", "opacity", "blur", "distance", "angle"}, f"{ctx}.shadow")
+            shadow = cc.TextShadow(alpha=num(sh.get("opacity", 0.8), f"{ctx}.shadow.opacity", lo=0, hi=1),
+                                   color=hex_rgb(sh.get("color", "#000000"), f"{ctx}.shadow.color"),
+                                   diffuse=num(sh.get("blur", 15), f"{ctx}.shadow.blur", lo=0, hi=100),
+                                   distance=num(sh.get("distance", 5), f"{ctx}.shadow.distance", lo=0, hi=100),
+                                   angle=num(sh.get("angle", -45), f"{ctx}.shadow.angle", lo=-180, hi=180))
         if st.get("background"):
             g = st["background"]
             check_keys(g, {"color", "opacity", "radius", "style", "width", "height"}, f"{ctx}.background")
             hex_rgb(g.get("color", "#000000"), f"{ctx}.background.color")
-            background = cc.TextBackground(color=g.get("color", "#000000"), style=int(g.get("style", 1)),
-                                           alpha=float(g.get("opacity", 1)), round_radius=float(g.get("radius", 0)),
-                                           height=float(g.get("height", 0.14)), width=float(g.get("width", 0.14)))
-        sc = float(st.get("scale", 1.0))
+            background = cc.TextBackground(
+                color=g.get("color", "#000000"), style=int(num(g.get("style", 1), f"{ctx}.background.style", lo=1, hi=2)),
+                alpha=num(g.get("opacity", 1), f"{ctx}.background.opacity", lo=0, hi=1),
+                round_radius=num(g.get("radius", 0), f"{ctx}.background.radius", lo=0, hi=1),
+                height=num(g.get("height", 0.14), f"{ctx}.background.height", lo=0, hi=1),
+                width=num(g.get("width", 0.14), f"{ctx}.background.width", lo=0, hi=1))
+        sc = num(st.get("scale", 1.0), f"{ctx}.scale", above=0)
         seg = cc.TextSegment(
             text, cc.Timerange(start, dur),
             font=self.res("font", st["font"]) if st.get("font") else None, style=style,
-            clip_settings=cc.ClipSettings(transform_x=float(st.get("x", 0)), transform_y=float(st.get("y", 0)),
-                                          scale_x=sc, scale_y=sc, rotation=float(st.get("rotation", 0))),
+            clip_settings=cc.ClipSettings(transform_x=num(st.get("x", 0), f"{ctx}.x"),
+                                          transform_y=num(st.get("y", 0), f"{ctx}.y"),
+                                          scale_x=sc, scale_y=sc, rotation=num(st.get("rotation", 0), f"{ctx}.rotation")),
             border=border, background=background, shadow=shadow,
         )
         budget = dur
@@ -737,8 +840,8 @@ class Builder:
                 track = self.place(cc.TrackType.text, item.get("track", "text"), seg.target_timerange)
                 self.script.add_segment(seg, track)
                 self.register(item, "text", start, dur, track, item["text"].replace("\n", " / ")[:40])
-            except (SpecError, ValueError) as e:
-                self.errors.append(str(e) if str(e).startswith(ctx) else f"{ctx}: {e}")
+            except ITEM_ERRORS as e:
+                self.fail(ctx, e)
 
     def caption_plays(self, source, ctx):
         """Clips that make `source` audible, or None when the times are timeline seconds."""
@@ -889,8 +992,8 @@ class Builder:
                 if cues:
                     self.timeline.append({"kind": "captions", "track": base, "id": None, "start": sec(cues[0][0]),
                                           "end": sec(cues[-1][0] + cues[-1][1]), "what": desc})
-            except (SpecError, ValueError, KeyError) as e:
-                self.errors.append(str(e) if str(e).startswith(ctx) else f"{ctx}: {e}")
+            except ITEM_ERRORS as e:
+                self.fail(ctx, e)
 
     # ---------- global fx / filters / stickers ----------
     def build_fx(self):
@@ -904,8 +1007,8 @@ class Builder:
                 track = self.place(cc.TrackType.effect, e.get("track", "fx"), rng)
                 self.script.add_effect(member, rng, track, params=self.params(member, e.get("params"), ctx))
                 self.register(e, "effect", start, dur, track, member.name)
-            except (SpecError, ValueError) as err:
-                self.errors.append(str(err) if str(err).startswith(ctx) else f"{ctx}: {err}")
+            except ITEM_ERRORS as err:
+                self.fail(ctx, err)
         for i, f in enumerate(self.spec.get("filters") or []):
             ctx = f"filters[{i}]"
             try:
@@ -914,10 +1017,11 @@ class Builder:
                 start, dur = self.span(f, ctx)
                 rng = cc.Timerange(start, dur)
                 track = self.place(cc.TrackType.filter, f.get("track", "look"), rng)
-                self.script.add_filter(member, rng, track, float(f.get("intensity", 100)))
+                self.script.add_filter(member, rng, track,
+                                       num(f.get("intensity", 100), f"{ctx}.intensity", lo=0, hi=100))
                 self.register(f, "filter", start, dur, track, member.name)
-            except (SpecError, ValueError) as err:
-                self.errors.append(str(err) if str(err).startswith(ctx) else f"{ctx}: {err}")
+            except ITEM_ERRORS as err:
+                self.fail(ctx, err)
         for i, s in enumerate(self.spec.get("stickers") or []):
             ctx = f"stickers[{i}]"
             try:
@@ -931,8 +1035,8 @@ class Builder:
                 track = self.place(cc.TrackType.sticker, s.get("track", "stickers"), seg.target_timerange)
                 self.script.add_segment(seg, track)
                 self.register(s, "sticker", start, dur, track, str(s["resource_id"]))
-            except (SpecError, ValueError) as err:
-                self.errors.append(str(err) if str(err).startswith(ctx) else f"{ctx}: {err}")
+            except ITEM_ERRORS as err:
+                self.fail(ctx, err)
 
     def build(self):
         try:
@@ -974,12 +1078,44 @@ class Builder:
         }
 
 
-def write_draft(builder: Builder, drafts_dir: Path, name: str, overwrite: bool, spec_text: str) -> Path:
+def back_up(target: Path, name: str) -> Path:
+    """Move a draft folder to ~/.cappus/backups/<name>-<time> and keep the newest BACKUPS_KEPT per name."""
+    root = backups_dir()
+    root.mkdir(parents=True, exist_ok=True)
+    dest = root / f"{name}-{time.strftime('%Y%m%d-%H%M%S')}"
+    n = 2
+    while dest.exists():
+        dest = root / f"{name}-{time.strftime('%Y%m%d-%H%M%S')}-{n}"
+        n += 1
+    try:
+        shutil.move(str(target), str(dest))
+    except OSError as e:
+        raise SpecError(f"could not move the old '{name}' to {dest} ({e}); nothing was changed. "
+                        "If CapCut has the draft open, ask the user to go back to the home screen.")
+    shutil.rmtree(dest / "matting", ignore_errors=True)  # Remove BG masks: a cache CapCut rebuilds
+    os.utime(dest)  # the folder time becomes the backup time, which orders the pruning below
+    pattern = re.compile(re.escape(name) + r"-\d{8}-\d{6}(-\d+)?$")
+    old = sorted((p for p in root.iterdir() if p.is_dir() and pattern.fullmatch(p.name)),
+                 key=lambda p: p.stat().st_mtime, reverse=True)
+    for stale in old[BACKUPS_KEPT:]:
+        shutil.rmtree(stale, ignore_errors=True)
+    return dest
+
+
+def write_draft(builder: Builder, drafts_dir: Path, name: str, overwrite: bool, spec_text: str,
+                force: bool = False, backup: bool = True):
+    """Write the draft folder. Returns (draft folder, backup folder of the replaced draft or None).
+
+    Replacing an existing draft needs overwrite=True, and force=True as well when the user changed it
+    in CapCut since it was built. The replaced draft is moved to backups_dir(), never deleted, unless
+    backup=False (throwaway probe drafts).
+    """
     if not name or re.search(r'[<>:"/\\|?*]', name):
         raise SpecError(f"draft name {name!r} is empty or has characters not allowed in a folder name")
     target = drafts_dir / name
+    saved = None
     if target.exists():
-        if not overwrite:
+        if not (overwrite or force):
             raise SpecError(f"a draft named '{name}' already exists. Change spec.name, or pass --overwrite to replace it.")
         if not (target / MARKER).is_file():
             raise SpecError(f"'{name}' exists but was not created by this tool, so it will not be overwritten. Pick another name.")
@@ -987,7 +1123,18 @@ def write_draft(builder: Builder, drafts_dir: Path, name: str, overwrite: bool, 
             raise SpecError(f"'{name}' is open in CapCut right now; it would overwrite this build when it saves. "
                             "Ask the user to go back to CapCut's home screen, then build again. (If CapCut is "
                             "closed, a stale .locked file is left in the draft folder.)")
-        shutil.rmtree(target)
+        state = edit_check(target)
+        if state["edited"] is not False and not force:
+            what = "was changed in CapCut since it was built" if state["edited"] else "may have been changed in CapCut"
+            changes = "; ".join(state.get("changes") or [])
+            raise SpecError(
+                f"'{name}' {what} ({state['how']}{': ' + changes if changes else ''}). Rebuilding would replace "
+                "the user's changes. Ask them first: build under a new name to keep both, or rebuild with "
+                f"--force, which first moves the current version to {backups_dir()}.")
+        if backup:
+            saved = back_up(target, name)
+        else:
+            shutil.rmtree(target)
     target.mkdir(parents=True)
     content = builder.script.dumps()
     # Older CapCut builds read draft_content.json, newer ones draft_info.json; write both.
@@ -1002,15 +1149,22 @@ def write_draft(builder: Builder, drafts_dir: Path, name: str, overwrite: bool, 
         "tm_duration": builder.script.duration, "tm_draft_create": now, "tm_draft_modified": now,
     })
     (target / "draft_meta_info.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+    sig = timeline_signature(json.loads(content))
+    (target / BUILD_FILE).write_text(json.dumps({
+        "built_at": time.strftime("%Y-%m-%dT%H:%M:%S"), "signature_sha256": signature_hash(sig), "signature": sig,
+    }, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
     (target / MARKER).write_text(spec_text, encoding="utf-8")
-    return target
+    return target, saved
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("spec", help="path to the edit spec JSON")
     ap.add_argument("--check", action="store_true", help="validate and print the timeline without writing")
-    ap.add_argument("--overwrite", action="store_true", help="replace an existing draft made by this tool")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="replace an existing draft made by this tool, if it was not edited in CapCut")
+    ap.add_argument("--force", action="store_true",
+                    help="replace it even if it was edited in CapCut (only after the user agrees)")
     ap.add_argument("--drafts-dir", help="CapCut draft folder (auto-detected by default)")
     tier = ap.add_mutually_exclusive_group()
     tier.add_argument("--allow-pro", dest="allow_pro", action="store_const", const=True,
@@ -1054,12 +1208,16 @@ def main() -> int:
                 f"CapCut's draft folder was not found; wrote to {drafts}. Copy the draft folder into "
                 "CapCut's draft location (CapCut > Settings > Drafts location).")
         try:
-            target = write_draft(builder, drafts, str(spec.get("name", spec_path.stem)), args.overwrite, spec_text)
+            target, saved = write_draft(builder, drafts, str(spec.get("name", spec_path.stem)), args.overwrite,
+                                        spec_text, force=args.force)
         except SpecError as e:
             print(f"ERROR: {e}", file=sys.stderr)
             return 1
         report["status"] = "draft written"
         report["draft"] = str(target)
+        if saved:
+            report["previous_version"] = (f"moved to {saved} (the newest {BACKUPS_KEPT} per draft are kept; "
+                                          "Remove BG masks are left out and CapCut recomputes them)")
     print(json.dumps(report, ensure_ascii=False, indent=1))
     return 0
 

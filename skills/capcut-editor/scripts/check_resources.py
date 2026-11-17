@@ -176,7 +176,9 @@ def build_probe(name, items, kinds, slot, recheck, drafts) -> dict:
         raise SpecError(f"{len(builder.errors)} problem(s) building {name}: " + "; ".join(builder.errors[:5]))
     marker = {"probe": True, "created": datetime.date.today().isoformat(), "kinds": kinds,
               "items": [{"kind": k, "name": m.name, "alias": alias_for(k, m)} for k, m in items]}
-    write_draft(builder, drafts, name, True, json.dumps(marker, ensure_ascii=False, indent=1))
+    # A probe draft is rebuilt from the catalog on every run, so it needs no backup.
+    write_draft(builder, drafts, name, True, json.dumps(marker, ensure_ascii=False, indent=1),
+                force=True, backup=False)
     return {"name": name, "items": {k: len(v) for k, v in by.items() if v},
             "length_seconds": round(builder.main_end / 1e6, 1)}
 

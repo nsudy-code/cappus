@@ -23,7 +23,7 @@ One JSON object. All times are **seconds**. Unknown keys are rejected (typos get
 |---|---|---|
 | `name` | spec file name | Draft name shown in CapCut. Also the folder name. |
 | `width`, `height` | 1080, 1920 | Canvas. 9:16 = 1080x1920, 16:9 = 1920x1080, 1:1 = 1080x1080, 4:5 = 1080x1350. |
-| `fps` | 30 | Match the footage when it is consistently 24/25/60. |
+| `fps` | 30 | Match the footage when it is consistently 24/25/60. CapCut projects run at 24, 25, 30, 50 or 60; any other value (29.97, 59.94) is rounded to the nearest with a warning. |
 | `allow_pro` | user's plan | Omit it normally: Pro is then allowed exactly when the user's saved plan is Pro (`tier.py`). Set `false` to force a free-only draft (e.g. it will be exported from a free account), `true` only if the user has Pro but it is not saved. |
 | `styles` | {} | Named text styles, reused via `"style": "<name>"`. |
 | `video` | required | Main-track clips, in playback order. |
@@ -70,7 +70,7 @@ Vertical-video safe zone (platform UI covers the rest): keep text within `y` fro
 | `src` | Video, image or GIF. Relative paths resolve from the spec file's folder. |
 | `in`, `out` | Source range in the file. Defaults: 0 and end of file. |
 | `duration` | Videos: timeline length instead of `out`. **Images: how long the still is shown (default 3).** |
-| `speed` | 0.1-10ish. 0.5 = slow motion (needs 60 fps footage to look smooth), 2 = fast. Constant only. |
+| `speed` | 0.1-100. 0.5 = slow motion (needs 60 fps footage to look smooth), 2 = fast. Constant only. |
 | `volume`, `mute` | Clip audio gain (1 = original), or `"mute": true`. |
 | `fade` | `{"in": 0.3, "out": 0.3}` - fades the clip's **audio**. For a visual fade use `intro`/`outro` `fade_in`/`fade_out`. |
 | `fit` | `"contain"` (default, whole frame visible, bars if aspect differs) or `"cover"` (fill canvas, crop overflow). |
@@ -234,7 +234,7 @@ Pro resources are rejected unless Pro is allowed (saved plan `pro`, `allow_pro: 
 (`null` keeps a default) or an object keyed by parameter name:
 
 ```bash
-python scripts/catalog.py scene_effect chromatic --params
+python <skill>/scripts/catalog.py scene_effect chromatic --params
 # chromatic   色差   free   params: horizontal_chromatic, vertical_chromatic
 ```
 ```json

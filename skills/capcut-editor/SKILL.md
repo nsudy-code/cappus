@@ -14,11 +14,14 @@ Two things make this work, and both are easy to get wrong without the bundled to
 1. **Only real CapCut resources.** Every transition, effect, filter, animation and font is referenced
    by an internal CapCut ID. A made-up name ("Cinematic Glow") silently does nothing. The bundled
    catalog holds ~5,000 real resources (~1,200 free, ~3,800 Pro); `build_draft.py` refuses anything
-   that is not in it, and anything CapCut is known to no longer load (`scripts/unavailable.json`).
+   that is not in it, and anything CapCut is known to no longer load (`<skill>/scripts/unavailable.json`).
 2. **You cannot watch the result.** You never see the render, so taste has to come from looking at the
    footage first, planning deliberately, and following the craft guidance rather than piling on effects.
 
 ## Setup (once per machine)
+
+`<skill>` below means this skill's folder (the one holding this SKILL.md). Commands use `python`; on
+macOS and most Linux systems that is usually `python3` (and `python3 -m pip`).
 
 ```bash
 python -m pip install -r <skill>/requirements.txt    # pycapcut + numpy
@@ -28,7 +31,8 @@ Captions from speech need one more, optional package (see step 2):
 `python -m pip install -r <skill>/requirements-captions.txt` (faster-whisper).
 
 `ffmpeg`/`ffprobe` must be on PATH. If `pip` targets a managed Python, create a venv and run the
-scripts with that interpreter. All scripts live in `<skill>/scripts/` and print JSON.
+scripts with that interpreter. The scripts live in `<skill>/scripts/`. They print JSON, except the
+plain-text lists from `catalog.py` and `inspect_draft.py --list`.
 
 ## Workflow
 
@@ -38,7 +42,7 @@ You need: the media files, where the video is going (decides aspect ratio), roug
 Infer what you can and state your assumptions instead of asking a list of questions. Defaults:
 vertical 1080x1920 at 30 fps, 15-40 s for short-form.
 
-**Know the user's CapCut plan.** Run `python scripts/tier.py` at the start. It prints the saved plan:
+**Know the user's CapCut plan.** Run `python <skill>/scripts/tier.py` at the start. It prints the saved plan:
 
 - `pro`: the full catalog is open, and Pro items are allowed with no `allow_pro` in the spec. Pro
   often has the more polished option for a job (film-stock looks, real camera moves, light leaks,
@@ -58,13 +62,13 @@ or not ("I'm on free CapCut", "I have Pro", "switch me to Pro"), save it right a
 ### 2. Look at the footage before deciding anything
 
 ```bash
-python scripts/probe.py clip1.mp4 clip2.mp4 song.mp3              # sizes, durations, fps
-python scripts/probe.py clip1.mp4 --sheet <scratch_dir> --frames 12   # then Read the JPG it reports
-python scripts/probe.py clip1.mp4 --sheet <scratch_dir> --from 12 --to 18   # zoom into a moment
-python scripts/probe.py clip1.mp4 --scenes        # shot changes inside a long file
-python scripts/probe.py talk.mp4 --silence        # speech segments, for cutting dead air
-python scripts/probe.py song.mp3 --beats          # bpm, beat times, downbeats, energy curve
-python scripts/transcribe.py talk.mp4             # what is said, with a time for every word
+python <skill>/scripts/probe.py clip1.mp4 clip2.mp4 song.mp3              # sizes, durations, fps
+python <skill>/scripts/probe.py clip1.mp4 --sheet <scratch_dir> --frames 12   # then Read the JPG it reports
+python <skill>/scripts/probe.py clip1.mp4 --sheet <scratch_dir> --from 12 --to 18   # zoom into a moment
+python <skill>/scripts/probe.py clip1.mp4 --scenes        # shot changes inside a long file
+python <skill>/scripts/probe.py talk.mp4 --silence        # speech segments, for cutting dead air
+python <skill>/scripts/probe.py song.mp3 --beats          # bpm, beat times, downbeats, energy curve
+python <skill>/scripts/transcribe.py talk.mp4             # what is said, with a time for every word
 ```
 
 Actually open the contact sheets with the Read tool. Choosing in/out points from filenames and
@@ -78,8 +82,8 @@ a transcript beside the media (`talk.mp4` -> `talk.transcript.json`; the path is
 every word's time in the source file. Running it again on the same file reuses that transcript. Read
 the `text` it prints; check names and anything under `low_confidence` or marked `(?)` with the user.
 
-- Not installed yet (exit code 3): ask once before installing, because it downloads about 0.6 GB the
-  first time (the package plus the default `small` model). Then run
+- Not installed yet (exit code 3): ask once before installing, because it downloads about 0.6 GB in all:
+  ~0.1 GB of packages now, then the default `small` model (~0.5 GB) on the first run. Then run
   `python -m pip install -r <skill>/requirements-captions.txt`.
 - Pass `--language id` (or `en`, ...) when you know it, and `--prompt "Name, Brand"` for spellings.
   `--model large-v3-turbo` (~1.6 GB) is more accurate and slower; offer it if `small` gets words wrong.
@@ -136,11 +140,11 @@ How the pieces behave:
 ### 4. Pick resources from the catalog, never from memory
 
 ```bash
-python scripts/catalog.py kinds                       # the 15 kinds and how many are free
-python scripts/catalog.py transition                  # curated picks with English aliases
-python scripts/catalog.py scene_effect glitch flash   # keyword search
-python scripts/catalog.py scene_effect shake --params # slider names; params are 0-100 in that order
-python scripts/catalog.py filter --all                # every filter, incl. un-aliased ones
+python <skill>/scripts/catalog.py kinds                       # the 15 kinds and how many are free
+python <skill>/scripts/catalog.py transition                  # curated picks with English aliases
+python <skill>/scripts/catalog.py scene_effect glitch flash   # keyword search
+python <skill>/scripts/catalog.py scene_effect shake --params # slider names; params are 0-100 in that order
+python <skill>/scripts/catalog.py filter --all                # every filter, incl. un-aliased ones
 ```
 
 The catalog follows the user's plan: with `pro` it lists free and Pro items (marked `PRO`), and with
@@ -153,19 +157,26 @@ picks, and a Chinese name is a perfectly valid value in the spec.
 ### 5. Validate, then build
 
 ```bash
-python scripts/build_draft.py edit.json --check   # all problems at once, with "did you mean" hints
-python scripts/build_draft.py edit.json           # writes the draft into CapCut's draft folder
+python <skill>/scripts/build_draft.py edit.json --check   # all problems at once, with "did you mean" hints
+python <skill>/scripts/build_draft.py edit.json           # writes the draft into CapCut's draft folder
 ```
 
 `--check` prints the resolved timeline. Read it: confirm the total duration, that text sits where you
 meant, that nothing runs past the main track, and that `pro_allowed` matches the user's plan. Fix every reported problem and re-check; do not
 remove a feature just to make an error go away without understanding it.
 
-To revise after feedback, edit the spec and rebuild with `--overwrite`. This only ever replaces drafts
-this tool created. **Overwriting discards changes the user made inside CapCut**, so first run
-`python scripts/inspect_draft.py "<draft name>"`: it prints the current timeline and
-`edited_in_capcut_since_build`. If the user edited it, ask before overwriting, or build under a new
-`name`. The draft must not be open in CapCut while you write it. The same script reads any draft the
+To revise after feedback, edit the spec and rebuild with `--overwrite`. It only replaces a draft this
+tool created, and only while the user has not changed it in CapCut: each build stores a fingerprint of
+the timeline (`.cappus-build.json`), and `--overwrite` refuses once the timeline no longer matches.
+Opening and playing the draft does not count as a change. The refusal lists what changed; so does
+`python <skill>/scripts/inspect_draft.py "<draft name>"` (`edited_in_capcut_since_build`,
+`changes_in_capcut`). Then ask the user: build under a new `name` to keep both versions, or rebuild
+with `--force`. `--force` never deletes: the current version moves to `~/.cappus/backups/<name>-<time>`
+(the newest 5 per draft are kept), and the build report names the folder under `previous_version`.
+Drafts built by cappus 0.4 or older have no fingerprint, so for those, opening the draft in CapCut
+already counts as a change.
+
+The draft must not be open in CapCut while you write it. `inspect_draft.py` also reads any draft the
 user made by hand, which is how you pick up sticker / fancy-text ids or learn their editing style.
 
 ### 6. Hand over honestly
@@ -186,7 +197,7 @@ Tell the user:
   stays visible until it finishes.
 
 If the user then reports "animation loss", a missing effect or a wrong font, run
-`python scripts/check_resources.py read "<draft name>"` (after they have opened the draft in CapCut
+`python <skill>/scripts/check_resources.py read "<draft name>"` (after they have opened the draft in CapCut
 and gone back to the home screen). It lists the catalog items CapCut could not load, under `failed`
 and `not_confirmed`. Replace both in the spec and rebuild. `--save` records the `failed` ones so the
 builder rejects them from now on (`references/capcut-notes.md`).

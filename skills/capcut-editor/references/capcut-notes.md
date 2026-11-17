@@ -13,8 +13,11 @@ the `CAPCUT_DRAFTS` environment variable. If no folder is found, `build_draft.py
 location.
 
 Each draft folder this tool writes contains `draft_content.json` and `draft_info.json` (same timeline;
-older and newer CapCut builds read different ones), `draft_meta_info.json`, and `.cappus.json` (a copy
-of the spec, which also marks the draft as safe for `--overwrite`). A draft with `remove_bg` clips
+older and newer CapCut builds read different ones), `draft_meta_info.json`, `.cappus.json` (a copy
+of the spec, which also marks the draft as one this tool made) and `.cappus-build.json` (a fingerprint
+of the timeline as built: clip timing, source ranges, speed, volume, transforms, effects, keyframes; no
+ids, so CapCut re-saving the file on open does not change it; CapCut also re-measures media lengths on
+open, so timings within 0.05 s count as unchanged). A draft with `remove_bg` clips
 also gets a `matting/` folder when CapCut first opens it. It holds CapCut's cutout masks, about
 3 MB per second of video, and CapCut rebuilds it if it is missing.
 
@@ -27,12 +30,23 @@ encrypts its drafts and is not supported. The mobile app does not open desktop d
 
 ## Revising a draft
 
-1. `inspect_draft.py "<name>"` - shows the timeline and `edited_in_capcut_since_build`.
+1. `inspect_draft.py "<name>"` - shows the timeline, `edited_in_capcut_since_build` and, when it
+   is true, `changes_in_capcut` (e.g. "track 1 (video) item at 4.00s: volume changed").
 2. If the user did not edit it in CapCut: change the spec, `build_draft.py spec.json --overwrite`.
-3. If they did: rebuilding discards their manual work. Ask first, or build with a new `name`
-   (e.g. "... v2") so both versions exist.
+   `--overwrite` checks the fingerprint itself and refuses if the timeline changed.
+3. If they did: ask first. Either build with a new `name` (e.g. "... v2") so both versions exist, or,
+   once they agree, rebuild with `--force`.
 4. CapCut must not have that draft open while you overwrite it; ask the user to go back to the
    CapCut home screen first.
+
+Neither flag deletes anything. The replaced version moves to `~/.cappus/backups/<name>-<time>`, and
+the build report names it under `previous_version`. The newest 5 backups per draft name are kept;
+the `matting/` cache is left out of them (CapCut rebuilds it). To bring a version back: close the
+draft in CapCut, move the current `<name>` folder out of the drafts folder, then move the backup in
+and rename it to exactly `<name>` (CapCut records the folder path inside the draft).
+
+Drafts built by cappus 0.4 or older have no `.cappus-build.json`. For those the check falls back to
+file times, so a draft the user only opened in CapCut also reads as edited (`edit_check` says so).
 
 ## What the generated draft can do
 
@@ -100,7 +114,7 @@ can export it has not been tested, so treat it like any Pro item.
 The catalog comes from pycapcut, and CapCut has since withdrawn some of its ids. Such an item looks
 fine in the spec and the build, but CapCut cannot download it: an animation shows an "animation
 loss" label on the clip, and a font falls back to the default. Items found this way are listed in
-`scripts/unavailable.json`. The builder rejects them with alternatives, and `catalog.py` hides them
+`<skill>/scripts/unavailable.json`. The builder rejects them with alternatives, and `catalog.py` hides them
 (`--show-broken` lists them).
 
 To find more, use `check_resources.py`:

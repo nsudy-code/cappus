@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import difflib
+import hashlib
 import json
 import os
 import sys
@@ -236,6 +237,229 @@ def resolve(kind: str, name, allow_pro: bool = False, allow_unavailable: bool = 
             f"it as missing (\"animation loss\").{hint} (search with: catalog.py {kind} <keyword>)"
         )
     return member
+
+
+# ---------- did the user change a draft in CapCut? ----------
+
+# Material kinds CapCut adds or rewrites on its own when it opens a draft; they say nothing about an edit.
+_SIG_SKIP = {"speeds", "canvases", "sound_channel_mappings", "vocal_separations", "placeholder_infos",
+             "material_colors", "beats", "loudnesses", "realtime_denoises", "smart_relights",
+             "multi_language_refs"}
+
+
+def _r(value, nd=4):
+    try:
+        return round(float(value), nd)
+    except (TypeError, ValueError):
+        return None
+
+
+def _material_key(kind: str, m: dict):
+    """What identifies a material from the user's point of view (ids change on every save)."""
+    if kind in ("videos", "audios"):
+        path = str(m.get("path") or "").replace("\\", "/")
+        key = [kind, path.rsplit("/", 1)[-1].lower()]
+        if kind == "videos":
+            key.append(int((m.get("matting") or {}).get("flag") or 0))
+        return key
+    if kind == "texts":
+        try:
+            return [kind, json.loads(m.get("content") or "{}").get("text", "")]
+        except (json.JSONDecodeError, AttributeError):
+            return [kind, str(m.get("content", ""))]
+    if kind == "material_animations":
+        return [kind, sorted(str(a.get("name") or a.get("id") or "") for a in m.get("animations") or [])]
+    if kind == "audio_fades":
+        return [kind, m.get("fade_in_duration"), m.get("fade_out_duration")]
+    if kind in ("masks", "common_mask"):  # CapCut 9 moves "masks" to "common_mask" with a new resource id
+        return ["mask", str(m.get("resource_type") or m.get("name") or "")]
+    if kind == "transitions":  # not the duration: CapCut shortens it on its own to fit short clips
+        return [kind, str(m.get("effect_id") or m.get("name") or "")]
+    return [kind, str(m.get("resource_id") or m.get("effect_id") or m.get("name") or m.get("type") or "")]
+
+
+SIG_VERSION = 2
+# CapCut re-measures media when it opens a draft (an MP3 of 16.039 s became 16.067 s) and stretches a
+# clip that plays its file to the end. Times within this slack count as equal.
+_SLACK_US = 50_000
+
+
+def timeline_signature(data: dict) -> dict:
+    """The parts of a timeline a user changes when they edit it in CapCut: clips, their timing,
+    transform, speed, volume, keyframes and attached animations / effects / filters / transitions,
+    plus texts and stickers. Ids and the fields CapCut rewrites by itself when it merely opens a draft
+    are left out, so opening, playing and closing a draft keeps the signature the same.
+
+    Each item's position is its gap after the previous item on the same track, so a clip CapCut
+    lengthens by a few milliseconds does not move everything after it. A clip that plays its media to
+    the end records "end" instead of a length, since CapCut may measure that length differently."""
+    by_id = {}
+    for kind, items in (data.get("materials") or {}).items():
+        if kind in _SIG_SKIP or not isinstance(items, list):
+            continue
+        for m in items:
+            if isinstance(m, dict) and "id" in m:
+                by_id[m["id"]] = (kind, m)
+    tracks = []
+    for t in data.get("tracks") or []:
+        segs = []
+        for s in t.get("segments") or []:
+            tr, src = s.get("target_timerange") or {}, s.get("source_timerange") or {}
+            kind, m = by_id.get(s.get("material_id"), ("?", {}))
+            clip = s.get("clip") or {}
+            extras = sorted(json.dumps(_material_key(*by_id[ref]), ensure_ascii=False)
+                            for ref in s.get("extra_material_refs") or [] if ref in by_id)
+            keyframes = sorted(
+                [k.get("property_type"), [[kf.get("time_offset"), [_r(v) for v in kf.get("values") or []]]
+                                          for kf in k.get("keyframe_list") or []]]
+                for k in s.get("common_keyframes") or [])
+            start, dur = int(tr.get("start") or 0), int(tr.get("duration") or 0)
+            src_part = None
+            if src:
+                s0, sd = int(src.get("start") or 0), int(src.get("duration") or 0)
+                full = m.get("duration") if kind in ("videos", "audios") and m.get("type") != "photo" else None
+                to_end = isinstance(full, (int, float)) and full > 0 and s0 + sd >= full - _SLACK_US
+                src_part = [s0, "end" if to_end else sd]
+            segs.append((start, dur, {
+                "t": round(start / 1e6, 2),  # for messages only; not compared
+                "dur": None if src_part and src_part[1] == "end" else dur, "src": src_part,
+                "speed": _r(s.get("speed", 1)), "volume": _r(s.get("volume", 1)),
+                "visible": s.get("visible", True), "material": _material_key(kind, m) if m else None,
+                "clip": [_r(clip.get("alpha")), (clip.get("flip") or {}).get("horizontal"),
+                         (clip.get("flip") or {}).get("vertical"), _r(clip.get("rotation")),
+                         _r((clip.get("scale") or {}).get("x")), _r((clip.get("scale") or {}).get("y")),
+                         _r((clip.get("transform") or {}).get("x")), _r((clip.get("transform") or {}).get("y"))]
+                if clip else None,
+                "extras": extras, "keyframes": keyframes,
+            }))
+        out, prev_end = [], 0
+        for start, dur, seg in sorted(segs, key=lambda x: (x[0], x[1])):
+            seg["gap"] = start - prev_end
+            prev_end = start + dur
+            out.append(seg)
+        tracks.append({"type": t.get("type"), "segments": out})
+    canvas = data.get("canvas_config") or {}
+    return {"v": SIG_VERSION, "canvas": [canvas.get("width"), canvas.get("height")],
+            "fps": _r(data.get("fps"), 2), "tracks": tracks}
+
+
+def _close(a, b) -> bool:
+    if isinstance(a, list) and isinstance(b, list):
+        return len(a) == len(b) and all(_close(x, y) for x, y in zip(a, b))
+    nums = (int, float)
+    if isinstance(a, nums) and isinstance(b, nums) and not isinstance(a, bool) and not isinstance(b, bool):
+        return abs(a - b) <= _SLACK_US
+    return a == b
+
+
+_FIELD_NAMES = {"gap": "position", "dur": "length", "src": "trim", "clip": "transform",
+                "extras": "effects/animations", "material": "media"}
+
+
+def _segment_changes(x: dict, y: dict) -> list:
+    out = []
+    for k in sorted(set(x) | set(y)):
+        if k == "t":
+            continue
+        a, b = x.get(k), y.get(k)
+        if not (_close(a, b) if k in ("gap", "dur", "src") else a == b):
+            out.append(_FIELD_NAMES.get(k, k))
+    return out
+
+
+def signature_hash(sig: dict) -> str:
+    raw = json.dumps(sig, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+MARKER = ".cappus.json"           # copy of the spec; marks a draft this tool may overwrite
+BUILD_FILE = ".cappus-build.json"  # timeline signature at build time, to detect edits made in CapCut
+BACKUPS_KEPT = 5                   # per draft name
+
+
+def backups_dir() -> Path:
+    return config_path().parent / "backups"
+
+
+def newest_timeline(folder: Path):
+    """(path, data) of the timeline file CapCut saved last, or (None, None) when there is none.
+    data is None when the file is not plain JSON (an encrypted JianYing draft, for example)."""
+    files = [p for name in ("draft_info.json", "draft_content.json")
+             for p in [folder / name] + sorted(folder.glob(f"Timelines/*/{name}")) if p.is_file()]
+    if not files:
+        return None, None
+    path = max(files, key=lambda f: f.stat().st_mtime)
+    try:
+        return path, json.loads(path.read_bytes().decode("utf-8-sig"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return path, None
+
+
+def describe_changes(old: dict, new: dict, limit: int = 8) -> list:
+    """Short, human-readable differences between two timeline signatures; empty when they match."""
+    out = []
+    if old.get("canvas") != new.get("canvas") or old.get("fps") != new.get("fps"):
+        out.append(f"canvas {old.get('canvas')}@{old.get('fps')} -> {new.get('canvas')}@{new.get('fps')}")
+    ot, nt = old.get("tracks") or [], new.get("tracks") or []
+    for i in range(max(len(ot), len(nt))):
+        a = ot[i] if i < len(ot) else None
+        b = nt[i] if i < len(nt) else None
+        if a is None:
+            out.append(f"track {i + 1} ({b['type']}) added with {len(b['segments'])} item(s)")
+        elif b is None:
+            out.append(f"track {i + 1} ({a['type']}) removed")
+        elif a["type"] != b["type"]:
+            out.append(f"track {i + 1}: {a['type']} -> {b['type']}")
+        elif len(a["segments"]) != len(b["segments"]):
+            out.append(f"track {i + 1} ({b['type']}): {len(a['segments'])} -> {len(b['segments'])} item(s)")
+        else:
+            for x, y in zip(a["segments"], b["segments"]):
+                fields = _segment_changes(x, y)
+                if fields:
+                    out.append(f"track {i + 1} ({b['type']}) item at {y.get('t', 0):.2f}s: "
+                               f"{', '.join(fields)} changed")
+                if len(out) >= limit:
+                    break
+        if len(out) >= limit:
+            out.append("...")
+            break
+    return out
+
+
+def edit_check(folder: Path) -> dict:
+    """Did the user change this tool-built draft in CapCut since it was built?
+
+    Returns {"edited": True / False / None (cannot tell), "how": ..., "changes": [...]}.
+    """
+    path, data = newest_timeline(folder)
+    if path is None:
+        return {"edited": None, "how": "the draft has no timeline file"}
+    if data is None:
+        return {"edited": None, "how": f"{path.name} is not plain JSON"}
+    try:
+        stored = json.loads((folder / BUILD_FILE).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        stored = None
+    old = stored.get("signature") if isinstance(stored, dict) else None
+    if isinstance(old, dict) and old.get("v") == SIG_VERSION:
+        now = timeline_signature(data)
+        if signature_hash(now) == stored.get("signature_sha256"):
+            return {"edited": False, "how": "timeline matches the build"}
+        changes = describe_changes(old, now)
+        if not changes:
+            return {"edited": False, "how": "timeline matches the build (CapCut adjusted some timings by "
+                                           "a few milliseconds)"}
+        return {"edited": True, "how": "timeline differs from the build", "changes": changes}
+    # Built by cappus 0.4 or older, which kept no signature: compare file times. CapCut rewrites the
+    # timeline when it merely opens a draft, so this also reports drafts that were only opened.
+    try:
+        built = (folder / MARKER).stat().st_mtime
+    except OSError:
+        return {"edited": None, "how": "no build record in the draft"}
+    newest = max(p.stat().st_mtime for p in folder.rglob("*.json")
+                 if p.name in ("draft_info.json", "draft_content.json"))
+    return {"edited": newest - built > 5,
+            "how": "file times (built by an older cappus, so opening the draft in CapCut also counts)"}
 
 
 def find_drafts_dir(explicit=None):
