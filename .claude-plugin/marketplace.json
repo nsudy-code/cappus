@@ -1,11 +1,11 @@
 {
   "name": "cappus",
-  "owner": {"name": "cappus"},
+  "owner": {"name": "nsudy-code"},
   "plugins": [
     {
       "name": "cappus",
       "source": "./",
-      "description": "Edit videos into editable CapCut desktop drafts."
+      "description": "Edit videos into editable CapCut desktop drafts. Works with free CapCut and CapCut Pro."
     }
   ]
 }

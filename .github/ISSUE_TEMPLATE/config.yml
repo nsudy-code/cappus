@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Panduan berbahasa Indonesia
+    url: https://github.com/nsudy-code/cappus/blob/main/docs/cara-pakai.md
+    about: Cara pasang, cara pakai, dan troubleshooting dalam bahasa Indonesia.

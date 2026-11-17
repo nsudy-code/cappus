@@ -1,0 +1,75 @@
+name: Bug report
+description: Something does not work as described in the README.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. If an effect, animation or font shows as missing ("animation loss"),
+        please use the **Resource does not load in CapCut** form instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the problem, and include any error message Claude or a script printed.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: What you asked Claude, or the command you ran.
+      placeholder: |
+        1. Asked Claude: "..."
+        2. Opened the draft in CapCut
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: spec
+    attributes:
+      label: Edit spec (optional)
+      description: The JSON spec Claude wrote, if relevant. Remove any private file paths first.
+      render: json
+  - type: input
+    id: capcut-version
+    attributes:
+      label: CapCut version
+      description: CapCut > Settings > About
+      placeholder: "9.8.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+    validations:
+      required: true
+  - type: dropdown
+    id: plan
+    attributes:
+      label: CapCut plan
+      options:
+        - Free
+        - Pro
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install cappus?
+      options:
+        - Plugin (claude plugin install)
+        - Clone and link
+        - Other
+    validations:
+      required: true

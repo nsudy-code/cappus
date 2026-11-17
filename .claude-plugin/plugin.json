@@ -1,5 +1,10 @@
 {
   "name": "cappus",
-  "version": "0.1.0",
-  "description": "Edit videos into editable CapCut desktop drafts: real CapCut transitions, effects, filters, animations, captions and keyframes, all adjustable on the CapCut timeline."
+  "version": "0.2.0",
+  "description": "Edit videos into editable CapCut desktop drafts: real CapCut transitions, effects, filters, animations, captions and keyframes, all adjustable on the CapCut timeline. Works with free CapCut and CapCut Pro.",
+  "author": {"name": "nsudy-code"},
+  "homepage": "https://github.com/nsudy-code/cappus",
+  "repository": "https://github.com/nsudy-code/cappus",
+  "license": "MIT",
+  "keywords": ["capcut", "video-editing", "skill", "reels", "shorts", "tiktok"]
 }

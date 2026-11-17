@@ -36,8 +36,9 @@ efek Pro (lihat [bagian 8](#8-capcut-pro)).
 
 ### Kebutuhan
 
-- **CapCut desktop** versi internasional, Windows atau macOS. Sudah dicoba di CapCut 8.0.1
-  (Windows). JianYing (versi Tiongkok) dan CapCut di HP tidak didukung.
+- **CapCut desktop** versi internasional. Sudah dicoba di CapCut 8.0.1 dan 9.8.0 (Windows). macOS
+  memakai format draft yang sama tetapi belum dicoba. JianYing (versi Tiongkok), CapCut di HP, dan
+  CapCut web tidak didukung.
 - **Python 3.9 atau lebih baru.**
 - **ffmpeg dan ffprobe** yang bisa dipanggil dari terminal.
 - **Claude yang berjalan di komputer yang sama dengan CapCut**, misalnya Claude Code atau tab Code
@@ -45,20 +46,37 @@ efek Pro (lihat [bagian 8](#8-capcut-pro)).
 
 ### Langkah 1: install dependensi Python
 
-Dari folder repo:
-
 ```bash
-python -m pip install -r skills/capcut-editor/requirements.txt
+python -m pip install "pycapcut==0.0.4" numpy
 ```
 
-Perintah ini memasang `pycapcut` (penulis draft CapCut) dan `numpy` (analisis beat lagu).
+Perintah ini memasang `pycapcut` (penulis draft CapCut) dan `numpy` (analisis beat lagu). Kalau
+belum terpasang, Claude juga akan memasangnya saat pertama kali dipakai.
 
 ### Langkah 2: pasang skill ke Claude
 
-Pilih salah satu cara.
+Pilih salah satu cara saja. Kalau dua-duanya dipakai, skill-nya terbaca dua kali.
 
-**Cara A: junction/symlink ke repo (disarankan).** Claude membaca skill langsung dari folder repo, jadi
-setiap `git pull` langsung terpakai.
+**Cara A: sebagai plugin (disarankan).** Jalankan di terminal:
+
+```bash
+claude plugin marketplace add nsudy-code/cappus
+```
+
+```bash
+claude plugin install cappus@cappus
+```
+
+Bisa juga dari dalam sesi Claude Code: `/plugin marketplace add nsudy-code/cappus`, lalu
+`/plugin install cappus@cappus` dan pilih scope. Plugin yang dipasang untuk user berlaku di
+terminal, aplikasi desktop, dan VS Code di komputer yang sama.
+
+**Cara B: clone repo lalu buat junction/symlink.** Cocok kalau Anda ingin ikut mengembangkan, atau
+ingin memperbarui dengan `git pull`. Claude membaca skill langsung dari folder repo.
+
+```bash
+git clone https://github.com/nsudy-code/cappus.git
+```
 
 Windows (PowerShell), ganti `<repo>` dengan lokasi folder repo:
 
@@ -74,24 +92,17 @@ ln -s "<repo>/skills/capcut-editor" ~/.claude/skills/capcut-editor
 
 Setelah memakai cara ini, jangan pindahkan atau hapus folder repo.
 
-**Cara B: salin folder.** Salin `skills/capcut-editor` ke `~/.claude/skills/capcut-editor`
-(Windows: `%USERPROFILE%\.claude\skills\capcut-editor`). Kalau repo diperbarui, salin ulang.
-
-**Cara C: sebagai plugin Claude Code**, kalau perintah `claude` tersedia di terminal. Jalankan dari
-folder repo:
-
-```bash
-claude plugin marketplace add ./
-```
-
-```bash
-claude plugin install cappus@cappus
-```
-
 ### Langkah 3: cek
 
 Buka sesi Claude **baru** (skill dibaca saat sesi dimulai), lalu tanya: "skill capcut-editor sudah
-terpasang?". Claude bisa melihat daftar skill yang aktif.
+terpasang?". Claude bisa melihat daftar skill yang aktif. Kalau dipasang sebagai plugin, skill ini
+juga muncul sebagai `/cappus:capcut-editor` saat Anda mengetik `/`.
+
+### Langkah 4: pilih CapCut gratis atau Pro
+
+Bilang saja ke Claude, misalnya "Saya pakai CapCut gratis" atau "Saya punya CapCut Pro". Kalau
+tidak, Claude akan bertanya sekali saat pertama kali dipakai. Selama belum dijawab, Claude hanya
+memakai efek gratis. Detailnya ada di [bagian 8](#8-capcut-pro).
 
 ## 3. Meminta edit pertama
 
@@ -248,7 +259,10 @@ Pada pemakaian pertama, Claude akan bertanya apakah Anda punya CapCut Pro. Jawab
 komputer Anda (`~/.cappus/config.json`), jadi Claude tidak akan bertanya lagi di sesi berikutnya.
 Selama belum dijawab, Claude hanya memakai efek gratis.
 
-Anda juga bisa mengaturnya sendiri dari folder repo:
+Kapan saja Anda bisa mengubahnya cukup dengan memberi tahu Claude, misalnya "Saya pakai CapCut
+gratis" atau "Saya sudah langganan CapCut Pro". Claude langsung menyimpan pengaturannya.
+
+Kalau memasang lewat clone (cara B), Anda juga bisa mengaturnya sendiri dari folder repo:
 
 ```bash
 python skills/capcut-editor/scripts/tier.py pro
@@ -420,10 +434,18 @@ Lokasi draft CapCut bawaan:
 
 ## 12. Memperbarui skill
 
+**Kalau dipasang sebagai plugin (cara A):**
+
 ```bash
-git pull
+claude plugin update cappus@cappus
 ```
 
-Kalau skill dipasang dengan junction/symlink (cara A), pembaruan langsung terpakai di sesi Claude
-berikutnya. Kalau dengan menyalin folder (cara B), salin ulang `skills/capcut-editor`. Kalau
-`requirements.txt` berubah, jalankan lagi perintah install dependensi.
+Atau dari dalam sesi: buka `/plugin`, masuk ke tab **Installed**, pilih cappus, lalu **Update now**.
+Plugin dari marketplace ini tidak diperbarui otomatis, kecuali Anda menyalakan auto-update untuk
+marketplace cappus di tab **Marketplaces**.
+
+**Kalau dipasang lewat clone (cara B):** jalankan `git pull` di folder repo.
+
+Pembaruan juga membawa daftar terbaru efek yang sudah ditarik CapCut, jadi perbarui skill kalau
+muncul "animation loss". Buka sesi Claude baru setelah memperbarui. Kalau `requirements.txt`
+berubah, jalankan lagi perintah install dependensi.

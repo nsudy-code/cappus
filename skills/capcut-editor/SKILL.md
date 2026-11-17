@@ -48,8 +48,9 @@ vertical 1080x1920 at 30 fps, 15-40 s for short-form.
 
 Pro matters at export: the account that exports needs Pro, or the export is blocked behind a
 paywall even though the draft opens and previews fine. If a Pro user says the draft is for someone
-on free CapCut, set `"allow_pro": false` in that spec. If someone tells you their plan changed,
-update it with `tier.py`.
+on free CapCut, set `"allow_pro": false` in that spec. Whenever the user states their plan, asked
+or not ("I'm on free CapCut", "I have Pro", "switch me to Pro"), save it right away with
+`tier.py free` or `tier.py pro` and confirm in one line.
 
 ### 2. Look at the footage before deciding anything
 

@@ -1,0 +1,42 @@
+name: Resource does not load in CapCut
+description: An effect, transition, filter, animation or font shows as missing ("animation loss") or falls back to the default.
+labels: ["resource"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        CapCut withdraws resources over time. Your report lets us add them to the list the builder
+        rejects, so nobody gets them again.
+
+        To get the exact names: open the draft in CapCut once, return to the home screen, then ask
+        Claude to run `check_resources.py read "<draft name>"`, or run it yourself from a clone.
+  - type: textarea
+    id: output
+    attributes:
+      label: Output of check_resources.py read
+      description: Paste the full JSON output. It lists the items that failed and the CapCut version.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: For example, whether the item worked in an earlier CapCut version.
+  - type: input
+    id: capcut-version
+    attributes:
+      label: CapCut version
+      description: CapCut > Settings > About
+      placeholder: "9.8.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+    validations:
+      required: true
