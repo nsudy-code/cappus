@@ -14,6 +14,7 @@ The spec format is documented in references/edit-spec.md.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -30,11 +31,13 @@ from pycapcut.script_file import ScriptFile
 
 MARKER = ".cappus.json"
 BLUR_LEVELS = {1: 0.0625, 2: 0.375, 3: 0.75, 4: 1.0}
+# CapCut replaces this token with the draft's own folder when it reads a path.
+DRAFT_DIR_TOKEN = "##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80_##"
 
 VISUAL_KEYS = {
     "id", "src", "in", "out", "duration", "speed", "volume", "mute", "fit", "background", "transform",
     "keyframes", "motion", "intro", "outro", "combo", "filter", "effects", "mask", "blend", "chroma",
-    "fade", "note",
+    "remove_bg", "fade", "note",
 }
 MAIN_KEYS = VISUAL_KEYS | {"transition"}
 OVERLAY_KEYS = VISUAL_KEYS | {"at", "end", "track"}
@@ -105,6 +108,23 @@ def check_keys(item, allowed, ctx):
     unknown = [k for k in item if k not in allowed]
     if unknown:
         raise SpecError(f"{ctx}: unknown key(s) {unknown}. Allowed: {sorted(allowed)}")
+
+
+def matting_json(media_path: str) -> dict:
+    """Video > Remove BG > Auto removal, as CapCut 9.8 saves it on the video material.
+
+    flag 3 turns it on. path names the draft's mask cache, matting/<md5 of the media path>, which
+    CapCut fills when it opens the draft. An empty path would make CapCut use one folder shared by
+    every draft (User Data/2), so masks from different drafts could mix.
+    """
+    digest = hashlib.md5(media_path.replace("\\", "/").encode("utf-8")).hexdigest()
+    return {
+        "flag": 3, "path": DRAFT_DIR_TOKEN + "/matting\\" + digest,
+        "custom_matting_id": str(uuid.uuid4()).upper(),
+        "interactiveTime": [], "has_use_quick_brush": False, "strokes": [], "has_use_quick_eraser": False,
+        "expansion": 0, "feather": 0, "reverse": False, "enable_matting_stroke": False,
+        "is_clould": False, "mask_video_path": "", "cloud_product_fps": 0.0, "usage": "",
+    }
 
 
 def named(value, ctx):
@@ -179,16 +199,22 @@ class Builder:
         if volume > 0:
             self.plays.append((os.path.normcase(src), tin, sdur, speed, start))
 
-    def vmat(self, src, ctx):
+    def vmat(self, src, ctx, remove_bg=False):
+        """One material per file, plus a separate one for its Remove BG clips (CapCut keeps the
+        Remove BG setting on the material, not on the clip)."""
         p = self.path(src, ctx)
-        if p not in self._vmats:
+        key = (p, remove_bg)
+        if key not in self._vmats:
             try:
                 mat = cc.VideoMaterial(p)
             except Exception as e:
                 raise SpecError(f"{ctx}: cannot read '{p}' as video/image: {e}")
             self._fix_rotation(mat)
-            self._vmats[p] = mat
-        return self._vmats[p]
+            if remove_bg:
+                export, matting = mat.export_json, matting_json(mat.path)
+                mat.export_json = lambda: {**export(), "matting": matting}
+            self._vmats[key] = mat
+        return self._vmats[key]
 
     @staticmethod
     def _fix_rotation(mat):
@@ -337,7 +363,18 @@ class Builder:
         return tin, tout - tin, speed
 
     def make_video(self, c, start, ctx, forced_dur=None):
-        mat = self.vmat(c.get("src"), ctx)
+        remove_bg = c.get("remove_bg", False)
+        if not isinstance(remove_bg, bool):
+            raise SpecError(f"{ctx}.remove_bg must be true or false")
+        if remove_bg:
+            if not self.allow_pro:
+                raise SpecError(
+                    f"{ctx}: remove_bg uses CapCut's Auto removal, a CapCut Pro feature, and Pro is not enabled. "
+                    "If the user has CapCut Pro, run `tier.py pro` or set \"allow_pro\": true in the spec. "
+                    "Otherwise leave it out and tell the user the one-click way: select the clip > "
+                    "Video > Remove BG > Auto removal.")
+            self.pro_used.append("feature: remove_bg (Auto removal)")
+        mat = self.vmat(c.get("src"), ctx, remove_bg)
         photo = mat.material_type == "photo"
         if forced_dur is not None and "out" not in c:
             c = dict(c, duration=forced_dur / 1_000_000)

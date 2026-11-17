@@ -245,7 +245,7 @@ menu di bawah mengikuti CapCut berbahasa Inggris.
 |---|---|
 | Speed ramp (kurva kecepatan) | Pilih klip > Speed > Curve. Claude bisa meniru kasarnya dengan beberapa potongan berkecepatan berbeda. |
 | Caption otomatis, kalau `faster-whisper` tidak dipasang | Text > Auto captions. Dengan `faster-whisper`, Claude membuat captionnya sendiri langsung di draft (lihat [bagian 9](#9-tips-agar-hasilnya-bagus)). |
-| Hapus background | Pilih klip > Video > Remove BG. |
+| Hapus background dengan kuas | Pilih klip > Video > Remove BG > Custom removal. Dengan CapCut Pro, Claude bisa langsung menyalakan Auto removal di draft. |
 | Freeze frame, reverse | Klik kanan klip > Freeze / Reverse. |
 | Auto reframe | Pilih klip > Auto reframe. |
 | Keyframe dengan easing | Klik keyframe > pilih kurva. Draft hanya membuat keyframe linear. |
@@ -263,6 +263,7 @@ Skill ini bisa dipakai oleh pengguna CapCut gratis maupun Pro. Bedanya ada di ef
 |---|---|---|
 | Item yang bisa dipakai | Sekitar 1.200 item gratis | Seluruh katalog, sekitar 5.000 item (1.200 gratis + 3.800 Pro) |
 | Pilihan yang sudah dikurasi | Sekitar 490 item dengan nama bahasa Inggris | Ditambah sekitar 390 pilihan Pro: look film (Kodak, Fuji, sinematik), efek gerakan kamera, light leak, animasi teks dan font yang lebih halus |
+| Hapus background langsung di draft | Tidak | Bisa (Auto removal CapCut). Saat draft pertama kali dibuka, CapCut perlu beberapa detik per klip untuk memotongnya. |
 | Ekspor | Selalu bisa | Butuh akun Pro saat ekspor |
 
 ### Memberi tahu Claude sekali saja

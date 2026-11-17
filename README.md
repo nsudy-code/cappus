@@ -129,6 +129,7 @@ know which plan you have.
 |---|---|---|
 | Resources available | About 1,200 free items | The full catalog, about 5,000 items |
 | Curated picks with English names | About 490 | About 490, plus about 390 Pro picks: film looks, camera-move effects, light leaks, refined text animations and fonts |
+| Background removal in the draft | No | Yes (CapCut's Auto removal) |
 | Export | Always works | The exporting account needs CapCut Pro |
 
 **How to choose:**
@@ -202,7 +203,7 @@ Some features cannot be written into a draft. Each takes one or two clicks in Ca
 |---|---|
 | Speed ramp (curve speed) | Select the clip > Speed > Curve |
 | Auto captions without installing faster-whisper | Text > Auto captions (with faster-whisper, Claude adds the captions itself; see [Captions](#captions)) |
-| Remove the background | Select the clip > Video > Remove BG |
+| Remove the background by brush | Select the clip > Video > Remove BG > Custom removal (with Pro, Claude can turn on Auto removal in the draft itself) |
 | Eased keyframes | Click a keyframe and choose an easing preset (drafts use linear keyframes) |
 | Color wheels, HSL, curves, LUTs | Select the clip > Adjust |
 | Sound effects and CapCut's music library | Audio > Sound effects / Music |

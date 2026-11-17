@@ -14,7 +14,9 @@ location.
 
 Each draft folder this tool writes contains `draft_content.json` and `draft_info.json` (same timeline;
 older and newer CapCut builds read different ones), `draft_meta_info.json`, and `.cappus.json` (a copy
-of the spec, which also marks the draft as safe for `--overwrite`).
+of the spec, which also marks the draft as safe for `--overwrite`). A draft with `remove_bg` clips
+also gets a `matting/` folder when CapCut first opens it. It holds CapCut's cutout masks, about
+3 MB per second of video, and CapCut rebuilds it if it is missing.
 
 Media is **linked, not copied**. Moving or renaming the source files makes CapCut show "media
 offline"; relinking in CapCut fixes it.
@@ -38,7 +40,7 @@ Cuts, trims, order, constant speed, volume, audio fades, multiple video/audio/te
 transform (position/scale/rotation/opacity/flip), linear keyframes (position, scale, rotation,
 opacity, saturation, contrast, brightness, volume), In/Out/Combo animations for clips and text,
 transitions, per-clip and track-level filters, scene and body effects with slider values, masks,
-blend modes, chroma key, background blur/color fill, text with font/color/stroke/shadow/background,
+blend modes, chroma key, background removal (Auto removal, Pro), background blur/color fill, text with font/color/stroke/shadow/background,
 text animations, word-level captions, stickers and fancy text by raw id.
 
 ## What it cannot do - tell the user the one-click CapCut way
@@ -47,7 +49,7 @@ text animations, word-level captions, stickers and fancy text by raw id.
 |---|---|
 | Speed ramp (curve speed) | Select clip > Speed > Curve. Or approximate in the spec: split the shot into consecutive clips with stepped `speed` values (e.g. 1.0 > 0.4 > 1.0). |
 | Auto captions, if `transcribe.py` cannot be installed | Text > Auto captions (then style them). Otherwise transcribe and caption in the spec, see `edit-spec.md`. |
-| Remove background / cutout | Select clip > Video > Remove BG. |
+| Background removal by brush | Select clip > Video > Remove BG > Custom removal. (Auto removal is `remove_bg` in the spec, Pro only.) |
 | Freeze frame, reverse | Right-click clip > Freeze / Reverse. |
 | Auto reframe | Select clip > Auto reframe. |
 | Eased keyframes | Click a keyframe > graph/ease presets. (The spec only produces linear keyframes.) |
@@ -87,6 +89,11 @@ The build report shows the decision in `pro_allowed` and lists every Pro item us
 ever has to export the draft. To make a free-account copy of a Pro edit, rebuild the same spec with
 `--free-only` under a new `name`, and replace each rejected item with one of the suggested free
 alternatives.
+
+`remove_bg` (Remove BG > Auto removal) is a Pro feature rather than a catalog item. The builder
+rejects it unless Pro is allowed, and lists it in `pro_resources` as `feature: remove_bg (Auto
+removal)`. CapCut showed the cutout in the preview even when not signed in. Whether a free account
+can export it has not been tested, so treat it like any Pro item.
 
 ## Items CapCut no longer loads ("animation loss")
 
@@ -130,6 +137,7 @@ an uncurated animation is fine as long as the builder accepts it.
 | Draft opens but the timeline is empty | Very new CapCut builds may read `Timelines/<id>/draft_info.json`. Report the CapCut version (Settings > About) - this needs a builder update; nothing in the spec will fix it. |
 | An effect/transition shows a download spinner | CapCut downloads resources on first use; needs internet. Wait, then it plays. |
 | "animation loss", a missing icon, or a font that falls back to the default | CapCut no longer serves that catalog item. Run `check_resources.py read "<draft>"`, replace what it lists, rebuild, and record it with `--save` (see above). |
+| A `remove_bg` clip still shows its background, or says "Applying Auto cutout" | CapCut computes the cutout the first time the draft opens, a few seconds per clip, then keeps it in the draft's `matting/` folder. Wait. If it never finishes, select the clip > Video > Remove BG and tick Auto removal again. |
 | "Media offline" | Source files moved or renamed. Relink in CapCut, or fix `src` and rebuild. |
 | Text too big/small | Font size is a first guess - adjust `size` in the style and rebuild, or resize in CapCut. |
 | Vertical phone video shows sideways | The builder corrects for rotation flags; if it still happens, set `transform.rotation` 90/-90 on that clip. |
