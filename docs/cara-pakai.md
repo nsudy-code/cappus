@@ -1,0 +1,429 @@
+# Cara pakai cappus
+
+Panduan ini untuk orang yang mau memakai skill `capcut-editor`: memasang, meminta edit ke Claude,
+membuka hasilnya di CapCut, dan merevisi. Detail teknis format spec ada di
+[`edit-spec.md`](../skills/capcut-editor/references/edit-spec.md).
+
+## Isi
+
+1. [Cara kerjanya](#1-cara-kerjanya)
+2. [Persiapan (sekali per komputer)](#2-persiapan-sekali-per-komputer)
+3. [Meminta edit pertama](#3-meminta-edit-pertama)
+4. [Apa yang dikerjakan Claude](#4-apa-yang-dikerjakan-claude)
+5. [Membuka hasil di CapCut](#5-membuka-hasil-di-capcut)
+6. [Revisi](#6-revisi)
+7. [Yang harus dikerjakan di CapCut](#7-yang-harus-dikerjakan-di-capcut)
+8. [CapCut Pro](#8-capcut-pro)
+9. [Tips agar hasilnya bagus](#9-tips-agar-hasilnya-bagus)
+10. [Masalah umum](#10-masalah-umum)
+11. [Menjalankan skrip sendiri](#11-menjalankan-skrip-sendiri)
+12. [Memperbarui skill](#12-memperbarui-skill)
+
+## 1. Cara kerjanya
+
+Anda memberi Claude bahan (video, foto, lagu) dan arahan. Claude menganalisis bahannya, menyusun
+rencana edit, lalu menulis **draft proyek CapCut** langsung ke folder proyek CapCut di komputer Anda.
+
+Hasilnya bukan file MP4. Anda membuka CapCut dan proyek itu sudah ada di daftar proyek, lengkap
+dengan potongan klip, teks, transisi, efek, filter, animasi, keyframe, dan caption. Semuanya bisa
+diubah seperti proyek yang Anda buat sendiri. Ekspor tetap Anda lakukan dari CapCut.
+
+Semua efek yang dipakai adalah efek asli CapCut. Pengguna CapCut gratis hanya mendapat efek gratis,
+jadi proyeknya selalu bisa diekspor. Pengguna CapCut Pro mendapat seluruh katalog, termasuk pilihan
+efek Pro (lihat [bagian 8](#8-capcut-pro)).
+
+## 2. Persiapan (sekali per komputer)
+
+### Kebutuhan
+
+- **CapCut desktop** versi internasional, Windows atau macOS. Sudah dicoba di CapCut 8.0.1
+  (Windows). JianYing (versi Tiongkok) dan CapCut di HP tidak didukung.
+- **Python 3.9 atau lebih baru.**
+- **ffmpeg dan ffprobe** yang bisa dipanggil dari terminal.
+- **Claude yang berjalan di komputer yang sama dengan CapCut**, misalnya Claude Code atau tab Code
+  di aplikasi Claude desktop. Claude di browser tidak bisa menulis ke folder CapCut Anda.
+
+### Langkah 1: install dependensi Python
+
+Dari folder repo:
+
+```bash
+python -m pip install -r skills/capcut-editor/requirements.txt
+```
+
+Perintah ini memasang `pycapcut` (penulis draft CapCut) dan `numpy` (analisis beat lagu).
+
+### Langkah 2: pasang skill ke Claude
+
+Pilih salah satu cara.
+
+**Cara A: junction/symlink ke repo (disarankan).** Claude membaca skill langsung dari folder repo, jadi
+setiap `git pull` langsung terpakai.
+
+Windows (PowerShell), ganti `<repo>` dengan lokasi folder repo:
+
+```powershell
+New-Item -ItemType Junction -Path "$env:USERPROFILE\.claude\skills\capcut-editor" -Target "<repo>\skills\capcut-editor"
+```
+
+macOS:
+
+```bash
+ln -s "<repo>/skills/capcut-editor" ~/.claude/skills/capcut-editor
+```
+
+Setelah memakai cara ini, jangan pindahkan atau hapus folder repo.
+
+**Cara B: salin folder.** Salin `skills/capcut-editor` ke `~/.claude/skills/capcut-editor`
+(Windows: `%USERPROFILE%\.claude\skills\capcut-editor`). Kalau repo diperbarui, salin ulang.
+
+**Cara C: sebagai plugin Claude Code**, kalau perintah `claude` tersedia di terminal. Jalankan dari
+folder repo:
+
+```bash
+claude plugin marketplace add ./
+```
+
+```bash
+claude plugin install cappus@cappus
+```
+
+### Langkah 3: cek
+
+Buka sesi Claude **baru** (skill dibaca saat sesi dimulai), lalu tanya: "skill capcut-editor sudah
+terpasang?". Claude bisa melihat daftar skill yang aktif.
+
+## 3. Meminta edit pertama
+
+### Siapkan bahan
+
+Kumpulkan video, foto, dan lagu dalam satu folder. Draft CapCut hanya **menautkan** file, tidak
+menyalinnya. Kalau file dipindah atau diganti namanya setelah draft dibuat, CapCut akan menampilkan
+"media offline".
+
+Musik harus berupa file milik Anda (MP3, WAV, dan sebagainya). Claude tidak bisa mengambil lagu dari
+library musik CapCut. Lagu dari library bisa Anda tambahkan sendiri di CapCut setelahnya.
+
+### Tulis permintaan
+
+Tulis seperti memberi arahan ke editor manusia. Yang paling membantu:
+
+| Sebutkan | Kalau tidak disebut |
+|---|---|
+| Lokasi file atau folder bahan | Claude akan menanyakannya |
+| Tujuan (Reels, TikTok, Shorts, YouTube) atau rasio | Vertikal 9:16, 1080x1920, 30 fps |
+| Perkiraan durasi | 15-40 detik untuk konten pendek |
+| Gaya atau mood (energik, sinematik, hangat, lucu, rapi) | Claude menebak dari isi footage dan menyebut tebakannya |
+| Lagu dan bagian yang dipakai ("mulai dari reff") | Tanpa musik tambahan; Claude memilih bagian lagu yang paling kuat kalau Anda memberi lagu |
+| Teks yang wajib muncul (judul, nama, ajakan) | Claude menambahkan teks seperlunya |
+| Momen penting ("lompatan di detik 12 klip ketiga") | Claude memilih sendiri dari contact sheet |
+| Punya CapCut Pro atau tidak | Claude bertanya sekali lalu mengingatnya (lihat [bagian 8](#8-capcut-pro)) |
+
+Anda tidak perlu menyebut nama efek. Cukup sebut suasananya, Claude yang memilih efek CapCut yang
+cocok. Kalau Anda punya efek favorit di CapCut, sebut namanya; Claude akan mencarinya di katalog.
+
+### Contoh permintaan
+
+**Montase ikut beat (travel, acara, olahraga)**
+
+> Bikin reels 9:16 sekitar 20 detik dari video di D:\Liburan\Bali, ikut beat lagu
+> D:\Musik\summer.mp3 mulai dari bagian reff. Gayanya energik, judul "BALI 2026" di awal.
+
+**Talking head (review, tutorial, potongan podcast)**
+
+> Rapikan video D:\Konten\review-hp.mp4: buang jeda diam, kasih zoom bergantian di tiap potongan,
+> caption kata per kata pakai transkrip D:\Konten\review-hp.srt. Format 9:16.
+
+**Vlog sinematik**
+
+> Edit klip di folder D:\Vlog\Bromo jadi video 16:9 sekitar 60 detik. Nuansanya tenang dan
+> sinematik, musik D:\Musik\ambient.mp3, transisi halus, judul kecil di awal.
+
+**Promo produk**
+
+> Buat iklan 15 detik untuk kopi kami dari foto dan video di D:\Produk\Kopi. Dua detik pertama harus
+> langsung menarik, tiap keunggulan diberi label teks pendek, tutup dengan logo D:\Produk\logo.png dan
+> tulisan "Pesan sekarang".
+
+**Slideshow foto**
+
+> Bikin slideshow kenangan dari foto-foto di D:\Foto\Wisuda. Tiap foto bergerak pelan, musik
+> D:\Musik\piano.mp3, nuansa hangat, tanggal dan tempat muncul di awal.
+
+## 4. Apa yang dikerjakan Claude
+
+1. **Memeriksa bahan:** ukuran, durasi, fps, dan orientasi tiap file.
+2. **Melihat isi video** lewat contact sheet (kumpulan cuplikan gambar) supaya potongan jatuh di
+   momen yang tepat, bukan di tengah gerakan.
+3. **Menganalisis audio:** beat dan bagian paling bertenaga dari lagu, atau jeda diam pada video
+   orang bicara.
+4. **Menyusun rencana:** pembuka (hook), isi, dan penutup, lengkap dengan waktu.
+5. **Menulis spec**, yaitu file JSON berisi resep edit. File ini disimpan di dekat bahan Anda dan
+   menjadi bahan revisi nanti.
+6. **Memvalidasi spec:** semua nama efek dicocokkan dengan katalog CapCut, dan durasi serta posisi
+   teks diperiksa.
+7. **Menulis draft** ke folder proyek CapCut.
+8. **Melapor:** nama draft, alasan di balik edit, bagian yang perlu Anda cek, dan hal yang perlu
+   diselesaikan di CapCut.
+
+Claude **tidak bisa menonton hasil render**. Karena itu selalu putar hasilnya di CapCut sebelum
+ekspor, terutama bagian yang Claude minta untuk dicek.
+
+## 5. Membuka hasil di CapCut
+
+1. Buka CapCut. Draft muncul di daftar proyek dengan nama yang Claude sebutkan.
+2. Kalau CapCut sudah terbuka saat draft dibuat, kembali ke halaman utama atau tutup lalu buka lagi
+   CapCut supaya daftarnya diperbarui.
+3. Saat pertama dibuka, beberapa efek atau transisi mungkin menampilkan ikon unduh. CapCut sedang
+   mengunduh efek itu, jadi pastikan ada internet dan tunggu sebentar.
+4. Putar dari awal. Yang paling sering perlu disesuaikan:
+   - ukuran dan posisi teks,
+   - volume musik dibandingkan suara orang bicara,
+   - posisi subjek pada video horizontal yang dipotong jadi vertikal.
+5. Ekspor dari CapCut seperti biasa.
+
+## 6. Revisi
+
+### Lewat Claude
+
+Tulis saja apa yang ingin diubah, misalnya:
+
+- "Judulnya kegedean, kecilin dan geser ke atas."
+- "Musiknya terlalu keras waktu ada yang ngomong."
+- "Filternya ganti yang lebih hangat."
+- "Klip ketiga terlalu lama, potong lebih cepat."
+- "Buat juga versi 16:9 untuk YouTube."
+
+Claude mengubah spec lalu membangun ulang draft. Beberapa hal yang perlu diketahui:
+
+- **Kembali ke halaman utama CapCut** (jangan biarkan draft itu terbuka) sebelum Claude menulis ulang.
+- **Perubahan manual Anda di CapCut bisa hilang.** Membangun ulang mengganti seluruh isi draft. Claude
+  memeriksa dulu apakah draft sudah Anda ubah di CapCut. Kalau sudah, Claude akan bertanya, atau
+  membuat draft baru dengan nama lain (misalnya "... v2") supaya versi Anda tetap ada.
+- Claude hanya pernah menimpa draft yang dibuatnya sendiri. Proyek CapCut Anda yang lain tidak akan
+  tersentuh.
+
+### Langsung di CapCut
+
+Draft ini proyek CapCut biasa, jadi Anda bebas mengubah apa saja di sana. Urutan yang enak:
+selesaikan revisi besar lewat Claude dulu (urutan klip, timing, gaya), lalu lakukan sentuhan akhir
+secara manual di CapCut.
+
+Claude juga bisa membaca draft yang sudah Anda ubah, termasuk proyek yang Anda buat sendiri. Ini
+berguna untuk menunjukkan gaya edit yang Anda suka, atau untuk memakai stiker dan teks template dari
+CapCut (lihat bagian berikut).
+
+## 7. Yang harus dikerjakan di CapCut
+
+Beberapa fitur CapCut tidak bisa dibuat lewat draft. Claude akan menyebutkannya di laporan. Nama
+menu di bawah mengikuti CapCut berbahasa Inggris.
+
+| Yang diinginkan | Cara di CapCut |
+|---|---|
+| Speed ramp (kurva kecepatan) | Pilih klip > Speed > Curve. Claude bisa meniru kasarnya dengan beberapa potongan berkecepatan berbeda. |
+| Caption otomatis dari suara | Text > Auto captions. Kalau Anda punya transkrip atau file SRT, Claude bisa membuat captionnya sendiri. |
+| Hapus background | Pilih klip > Video > Remove BG. |
+| Freeze frame, reverse | Klik kanan klip > Freeze / Reverse. |
+| Auto reframe | Pilih klip > Auto reframe. |
+| Keyframe dengan easing | Klik keyframe > pilih kurva. Draft hanya membuat keyframe linear. |
+| Color wheel, HSL, curves, LUT | Pilih klip > Adjust. |
+| Sound effect dan musik dari library CapCut | Audio > Sound effects / Music. |
+| Stiker dan text template dari library | Panel Stickers / Text templates. Atau tambahkan sekali secara manual ke draft mana saja, lalu minta Claude memakainya; Claude bisa membaca ID-nya dari draft itu. |
+| Peredam noise, perjelas suara | Pilih audio > Reduce noise / Enhance voice. |
+| Ekspor | Tombol Export di kanan atas. |
+
+## 8. CapCut Pro
+
+Skill ini bisa dipakai oleh pengguna CapCut gratis maupun Pro. Bedanya ada di efek yang boleh dipakai:
+
+| | CapCut gratis | CapCut Pro |
+|---|---|---|
+| Item yang bisa dipakai | Sekitar 1.200 item gratis | Seluruh katalog, sekitar 5.000 item (1.200 gratis + 3.800 Pro) |
+| Pilihan yang sudah dikurasi | Sekitar 490 item dengan nama bahasa Inggris | Ditambah sekitar 390 pilihan Pro: look film (Kodak, Fuji, sinematik), efek gerakan kamera, light leak, animasi teks dan font yang lebih halus |
+| Ekspor | Selalu bisa | Butuh akun Pro saat ekspor |
+
+### Memberi tahu Claude sekali saja
+
+Pada pemakaian pertama, Claude akan bertanya apakah Anda punya CapCut Pro. Jawabannya disimpan di
+komputer Anda (`~/.cappus/config.json`), jadi Claude tidak akan bertanya lagi di sesi berikutnya.
+Selama belum dijawab, Claude hanya memakai efek gratis.
+
+Anda juga bisa mengaturnya sendiri dari folder repo:
+
+```bash
+python skills/capcut-editor/scripts/tier.py pro
+```
+
+```bash
+python skills/capcut-editor/scripts/tier.py free
+```
+
+Jalankan `tier.py` tanpa argumen untuk melihat pengaturan saat ini. Pengaturan ini berlaku per
+pengguna komputer. Jadi di tim, setiap orang mengatur tier-nya sendiri sekali di komputer
+masing-masing.
+
+### Yang perlu diperhatikan
+
+- **Ekspor butuh Pro.** Proyek berisi efek Pro tetap bisa dibuka dan diputar di akun gratis, tapi
+  ekspornya terkunci. Masalah ini baru ketahuan di akhir, karena itu Claude selalu menyebutkan efek
+  Pro yang dipakai di laporannya.
+- **Membuat draft untuk orang yang tidak punya Pro.** Bilang saja, misalnya "ini nanti diekspor
+  teman yang pakai CapCut gratis". Claude akan membuat versi yang hanya memakai efek gratis.
+- **Efek Pro bukan alasan untuk menumpuk efek.** Claude tetap hemat efek. Bedanya, untuk setiap
+  kebutuhan Claude bisa memilih versi yang paling bagus, dari katalog gratis maupun Pro.
+- **Pilihan Pro dikurasi dari namanya.** Saat sebuah efek Pro pertama kali dipakai, cek di preview
+  bahwa tampilannya memang sesuai.
+
+## 9. Tips agar hasilnya bagus
+
+- **Sebut suasana dan tujuan, bukan daftar efek.** "Energik untuk TikTok" lebih berguna daripada
+  "pakai glitch, shake, dan zoom". Claude sengaja hemat efek karena edit yang penuh efek justru terlihat
+  murahan.
+- **Beri lagu dan sebut bagiannya.** Potongan yang jatuh tepat di beat adalah pembeda terbesar pada
+  montase.
+- **Sebut momen terbaik kalau Anda tahu.** Claude melihat cuplikan gambar, bukan video utuh, jadi
+  petunjuk "ombak besar di detik 40 klip 5" sangat membantu.
+- **Untuk caption video bicara, sertakan transkrip atau file SRT.** Tanpa itu, pakai Auto captions di
+  CapCut setelah draft jadi.
+- **Pakai bahan berkualitas.** Video 60 fps bisa dibuat slow motion dengan mulus; 30 fps akan patah-patah.
+- **Revisi sedikit demi sedikit.** Dua atau tiga perubahan per permintaan lebih mudah dicek daripada
+  sepuluh sekaligus.
+
+## 10. Masalah umum
+
+| Gejala | Penyebab dan solusi |
+|---|---|
+| Draft tidak muncul di daftar proyek | CapCut terbuka saat draft ditulis. Kembali ke halaman utama atau buka ulang CapCut. Kalau lokasi draft CapCut Anda ubah di Settings, beri tahu Claude lokasinya. |
+| Draft terbuka tapi timeline kosong | Kemungkinan CapCut versi baru memakai format lain. Catat versi CapCut (Settings > About) dan laporkan; skill perlu diperbarui. |
+| Efek menampilkan ikon unduh | CapCut sedang mengunduh efek. Pastikan ada internet dan tunggu. |
+| Tulisan "animation loss", ikon efek rusak, atau font kembali ke font bawaan | CapCut sudah tidak menyediakan item itu lagi. Item seperti ini tetap ada di katalog lama dan baru ketahuan saat draft dibuka. Bilang ke Claude nama draft-nya. Claude akan mengecek item mana yang gagal dimuat, menggantinya, lalu mencatatnya agar tidak dipakai lagi. Cara cek sendiri ada di [bagian 11](#11-menjalankan-skrip-sendiri). |
+| "Media offline" | File sumber dipindah atau diganti nama. Tautkan ulang di CapCut, atau kembalikan file ke tempatnya. |
+| Teks terlalu besar atau kecil | Ukuran teks adalah tebakan awal. Minta Claude mengubahnya, atau ubah langsung di CapCut. |
+| Video HP tampil miring | Minta Claude memutar klip tersebut 90 derajat. |
+| Claude bilang `pycapcut` belum terpasang | Ulangi langkah install dependensi di bagian 2. |
+
+## 11. Menjalankan skrip sendiri
+
+Bagian ini opsional, untuk yang ingin memakai alatnya tanpa Claude atau ingin memahami cara kerjanya.
+Semua perintah dijalankan dari folder repo dan hasilnya berupa JSON.
+
+**Mencari efek di katalog CapCut:**
+
+```bash
+python skills/capcut-editor/scripts/catalog.py kinds
+```
+
+```bash
+python skills/capcut-editor/scripts/catalog.py transition glitch
+```
+
+```bash
+python skills/capcut-editor/scripts/catalog.py filter --all
+```
+
+`kinds` menampilkan 15 jenis resource. Item Pro ikut tampil kalau tier Anda `pro`. Tambahkan
+`--free` atau `--pro` untuk mengganti pengaturan itu sekali saja, dan `--params` untuk melihat nama
+slider yang bisa diatur.
+
+**Menganalisis bahan:**
+
+```bash
+python skills/capcut-editor/scripts/probe.py klip.mp4 lagu.mp3
+```
+
+```bash
+python skills/capcut-editor/scripts/probe.py lagu.mp3 --beats
+```
+
+```bash
+python skills/capcut-editor/scripts/probe.py klip.mp4 --sheet folder-output --frames 12
+```
+
+Opsi lain: `--scenes` untuk mencari pergantian adegan dan `--silence` untuk mencari jeda diam.
+
+**Membuat draft dari spec:**
+
+```bash
+python skills/capcut-editor/scripts/build_draft.py spec.json --check
+```
+
+```bash
+python skills/capcut-editor/scripts/build_draft.py spec.json
+```
+
+`--check` hanya memvalidasi dan menampilkan timeline tanpa menulis apa pun. Opsi lain:
+
+- `--overwrite` menimpa draft yang sebelumnya dibuat alat ini;
+- `--drafts-dir <folder>` dipakai kalau lokasi draft CapCut bukan bawaan;
+- `--allow-pro` atau `--free-only` memaksa izinkan atau tolak efek Pro untuk build itu saja.
+  Tanpa opsi ini, yang dipakai adalah `allow_pro` di spec, lalu tier pengguna.
+
+Contoh spec lengkap ada di [`examples/demo.json`](../examples/demo.json). Media untuk contoh itu bisa
+dibuat dengan `python examples/make_test_media.py`.
+
+**Membaca draft yang sudah ada:**
+
+```bash
+python skills/capcut-editor/scripts/inspect_draft.py --list
+```
+
+```bash
+python skills/capcut-editor/scripts/inspect_draft.py "nama draft" --diff
+```
+
+`--list` menampilkan semua draft dan menandai yang dibuat alat ini. Dengan nama draft, skrip
+menampilkan isi timeline dan apakah draft sudah diubah di CapCut. `--diff` ikut menampilkan spec
+asalnya.
+
+**Mengecek item yang tidak bisa dimuat CapCut ("animation loss"):**
+
+```bash
+python skills/capcut-editor/scripts/check_resources.py read "nama draft"
+```
+
+Jalankan setelah draft dibuka di CapCut. Skrip menampilkan item katalog yang gagal dimuat.
+
+Untuk mengecek semua animasi dan font pilihan sekaligus:
+
+```bash
+python skills/capcut-editor/scripts/check_resources.py probe
+```
+
+Perintah ini membuat draft `cappus-check`. Buka draft itu di CapCut, putar sampai habis, tunggu
+sampai tidak ada yang sedang diunduh, lalu kembali ke halaman utama. Setelah itu jalankan:
+
+```bash
+python skills/capcut-editor/scripts/check_resources.py read --save
+```
+
+Item yang gagal dicatat di `scripts/unavailable.json`. Sejak itu builder menolaknya dan katalog
+menyembunyikannya. Commit file itu supaya seluruh tim ikut terlindungi. `probe --kinds all` ikut
+mengecek transisi, filter, dan efek, tetapi unduhannya jauh lebih besar.
+
+Dua hal yang perlu diingat:
+
+- CapCut baru menyimpan hasil unduhan saat Anda keluar dari editor. Selama draft masih terbuka,
+  `read` menolak membacanya.
+- Kalau item yang dicek banyak, `probe` memecahnya menjadi beberapa draft (`cappus-check-1`,
+  `cappus-check-2`, dan seterusnya). Satu draft yang terlalu besar membuat CapCut berhenti
+  mengunduh. Buka draft itu satu per satu: putar sampai habis, lalu kembali ke halaman utama
+  sebelum membuka draft berikutnya. Setelah semuanya selesai, baca semuanya sekaligus, misalnya
+  `check_resources.py read cappus-check-1 cappus-check-2 --save`.
+- Item yang gagal dimuat tetapi belum pasti sudah ditarik CapCut (misalnya karena CapCut belum
+  mengunduh apa pun di draft itu) muncul di `not_confirmed`. Ganti item itu di draft, tetapi item
+  itu tidak dicatat di `unavailable.json`.
+
+Lokasi draft CapCut bawaan:
+
+- Windows: `%LOCALAPPDATA%\CapCut\User Data\Projects\com.lveditor.draft`
+- macOS: `~/Movies/CapCut/User Data/Projects/com.lveditor.draft`
+
+## 12. Memperbarui skill
+
+```bash
+git pull
+```
+
+Kalau skill dipasang dengan junction/symlink (cara A), pembaruan langsung terpakai di sesi Claude
+berikutnya. Kalau dengan menyalin folder (cara B), salin ulang `skills/capcut-editor`. Kalau
+`requirements.txt` berubah, jalankan lagi perintah install dependensi.

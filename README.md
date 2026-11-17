@@ -5,10 +5,18 @@ yang tetap bisa diedit**. Hasilnya bukan MP4 jadi, melainkan proyek CapCut biasa
 transisi, efek, filter, animasi, keyframe, dan caption semuanya muncul di timeline CapCut dan bisa
 diubah sesukanya.
 
-Semua efek yang dipakai adalah resource asli CapCut: sekitar 6.000 transisi, efek, filter, animasi, dan
-font, lengkap dengan ID internalnya. Dari jumlah itu sekitar 1.100 gratis. Builder menolak nama yang
-tidak ada di katalog, dan secara default juga menolak item **Pro**, supaya draft bisa diekspor tanpa
-langganan.
+Semua efek yang dipakai adalah resource asli CapCut: sekitar 5.000 transisi, efek, filter, animasi, dan
+font, lengkap dengan ID internalnya. Dari jumlah itu sekitar 1.200 gratis dan 3.800 Pro. Builder menolak nama yang
+tidak ada di katalog, juga sekitar 380 item (kebanyakan animasi lama) yang sudah ditarik CapCut, supaya
+draft tidak memunculkan "animation loss".
+
+Skill ini mendukung **CapCut gratis maupun Pro**. Claude bertanya sekali apakah pengguna punya Pro,
+lalu mengingat jawabannya. Pengguna gratis hanya mendapat item gratis, jadi draft selalu bisa
+diekspor. Pengguna Pro mendapat seluruh katalog plus sekitar 390 pilihan Pro yang sudah dikurasi,
+seperti look film, gerakan kamera, light leak, dan animasi teks.
+
+Panduan lengkap pemakaian (pemasangan, contoh permintaan, revisi, troubleshooting):
+**[docs/cara-pakai.md](docs/cara-pakai.md)**.
 
 ## Isi repo
 
@@ -24,10 +32,17 @@ skills/capcut-editor/
     catalog.py                cari transisi/efek/filter/animasi/font yang ada di CapCut
     build_draft.py            spec JSON -> draft CapCut (validasi + tulis)
     inspect_draft.py          baca draft yang sudah ada (termasuk hasil edit manual)
+    tier.py                   simpan/lihat apakah pengguna punya CapCut Pro
+    check_resources.py        cek item katalog yang tidak bisa dimuat CapCut ("animation loss")
     aliases.json              ~490 alias bahasa Inggris untuk resource gratis
+    aliases_pro.json          ~390 pilihan Pro yang dikurasi, dengan alias bahasa Inggris
+    unavailable.json          item yang sudah ditarik CapCut; builder menolaknya
   requirements.txt
+docs/
+  cara-pakai.md               panduan pemakaian untuk pengguna
 examples/
   demo.json                   contoh spec yang memakai hampir semua fitur
+  demo-pro.json               contoh spec dengan item CapCut Pro
   make_test_media.py          membuat media sintetis untuk demo
 .claude-plugin/               manifest agar repo bisa dipasang sebagai plugin Claude Code
 ```
@@ -35,7 +50,7 @@ examples/
 ## Kebutuhan
 
 - CapCut desktop (versi internasional) di Windows atau macOS. Sudah diverifikasi: draft hasil
-  `examples/demo.json` terbuka dan bisa diputar di CapCut 8.0.1 (Windows).
+  `examples/demo.json` terbuka dan bisa diputar di CapCut 8.0.1 dan 9.8.0 (Windows).
 - Python 3.9+ dan `ffmpeg`/`ffprobe` di PATH.
 - `python -m pip install -r skills/capcut-editor/requirements.txt` (berisi `pycapcut` dan `numpy`).
 
@@ -73,6 +88,7 @@ Claude akan:
 
 Setelah itu buka CapCut. Draft muncul di daftar proyek (kalau CapCut sedang terbuka, kembali ke home
 atau restart dulu). Untuk revisi, minta Claude lagi: Claude mengubah spec lalu membangun ulang draft.
+Contoh permintaan per genre dan cara revisi ada di [docs/cara-pakai.md](docs/cara-pakai.md).
 
 ## Mencoba manual
 

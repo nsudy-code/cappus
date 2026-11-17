@@ -47,8 +47,13 @@ KINDS = {
     "blend": (cc.MixModeType, "overlay blend mode"),
 }
 
-_ALIASES_PATH = Path(__file__).resolve().parent / "aliases.json"
+_HERE = Path(__file__).resolve().parent
+# aliases.json: English names for free resources. aliases_pro.json: curated CapCut Pro picks.
+_ALIAS_FILES = (_HERE / "aliases.json", _HERE / "aliases_pro.json")
+# Items CapCut no longer loads ("animation loss"); maintained with check_resources.py.
+UNAVAILABLE_FILE = _HERE / "unavailable.json"
 _aliases_cache = None
+_unavailable_cache = None
 _index_cache: dict = {}
 
 
@@ -57,11 +62,73 @@ def norm(name: str) -> str:
 
 
 def aliases() -> dict:
+    """kind -> {alias: CapCut name}, free aliases first (they win if a key appears twice)."""
     global _aliases_cache
     if _aliases_cache is None:
-        with open(_ALIASES_PATH, encoding="utf-8") as f:
-            _aliases_cache = json.load(f)
+        merged: dict = {}
+        for path in _ALIAS_FILES:
+            if not path.is_file():
+                continue
+            with open(path, encoding="utf-8") as f:
+                for kind, table in json.load(f).items():
+                    if kind.startswith("_"):
+                        continue
+                    bucket = merged.setdefault(kind, {})
+                    for alias, target in table.items():
+                        bucket.setdefault(alias, target)
+        _aliases_cache = merged
     return _aliases_cache
+
+
+def unavailable(reload: bool = False) -> dict:
+    """kind -> {catalog name: note} for items CapCut desktop fails to load."""
+    global _unavailable_cache
+    if _unavailable_cache is None or reload:
+        try:
+            with open(UNAVAILABLE_FILE, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            data = {}
+        _unavailable_cache = {k: v for k, v in data.items() if not k.startswith("_") and isinstance(v, dict)}
+    return _unavailable_cache
+
+
+def unavailable_note(kind: str, member):
+    """Why this item is blocked, or None when it is usable."""
+    return unavailable().get(kind, {}).get(member.name)
+
+
+# ---------- the user's CapCut plan (free or Pro), remembered per user ----------
+
+def config_path() -> Path:
+    return Path(os.environ.get("CAPPUS_CONFIG") or (Path.home() / ".cappus" / "config.json"))
+
+
+def load_config() -> dict:
+    try:
+        with open(config_path(), encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def save_config(cfg: dict) -> Path:
+    path = config_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    return path
+
+
+def user_tier():
+    """Return (tier, source): tier is "pro", "free" or None when nobody has said yet."""
+    env = (os.environ.get("CAPPUS_TIER") or "").strip().lower()
+    if env in ("pro", "free"):
+        return env, "CAPPUS_TIER environment variable"
+    saved = load_config().get("tier")
+    if saved in ("pro", "free"):
+        return saved, str(config_path())
+    return None, "not set"
 
 
 def display_name(member) -> str:
@@ -116,7 +183,7 @@ def suggest(kind: str, name: str, allow_pro: bool, n: int = 6) -> list:
     lookup, alias_of = _index(kind)
     pool = {}
     for member in KINDS[kind][0]:
-        if is_pro(member) and not allow_pro:
+        if (is_pro(member) and not allow_pro) or unavailable_note(kind, member):
             continue
         pool[norm(member.name)] = member
         if member.name in alias_of:
@@ -132,13 +199,19 @@ def suggest(kind: str, name: str, allow_pro: bool, n: int = 6) -> list:
     return out[:n]
 
 
-def resolve(kind: str, name, allow_pro: bool = False):
-    """Look up a CapCut resource by alias or catalog name. Raises SpecError with suggestions."""
+def resolve(kind: str, name, allow_pro: bool = False, allow_unavailable: bool = False):
+    """Look up a CapCut resource by alias or catalog name. Raises SpecError with suggestions.
+
+    `name` may also be a catalog member itself (check_resources.py builds probes that way).
+    """
     if kind not in KINDS:
         raise SpecError(f"unknown catalog kind '{kind}'")
-    if not isinstance(name, str) or not name.strip():
+    if isinstance(name, KINDS[kind][0]):
+        member, name = name, name.name
+    elif not isinstance(name, str) or not name.strip():
         raise SpecError(f"{kind} name must be a non-empty string, got {name!r}")
-    member = _index(kind)[0].get(norm(name))
+    else:
+        member = _index(kind)[0].get(norm(name))
     if member is None:
         tips = suggest(kind, name, allow_pro)
         hint = f" Did you mean: {', '.join(tips)}?" if tips else ""
@@ -150,8 +223,17 @@ def resolve(kind: str, name, allow_pro: bool = False):
         tips = suggest(kind, name, False)
         hint = f" Free options: {', '.join(tips)}." if tips else ""
         raise SpecError(
-            f"{kind} '{name}' is a CapCut Pro resource; exporting would require a subscription.{hint} "
-            "Set \"allow_pro\": true in the spec only if the user has CapCut Pro."
+            f"{kind} '{name}' is a CapCut Pro resource and Pro is not enabled; exporting it would need a "
+            f"subscription.{hint} If the user has CapCut Pro, run `tier.py pro` (remembered for this user) "
+            "or set \"allow_pro\": true in the spec."
+        )
+    note = unavailable_note(kind, member)
+    if note and not allow_unavailable:
+        tips = suggest(kind, name, allow_pro)
+        hint = f" Alternatives: {', '.join(tips)}." if tips else ""
+        raise SpecError(
+            f"{kind} '{name}' is in the catalog but CapCut no longer loads it ({note}); the draft would show "
+            f"it as missing (\"animation loss\").{hint} (search with: catalog.py {kind} <keyword>)"
         )
     return member
 

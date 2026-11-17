@@ -20,15 +20,17 @@ from _common import find_drafts_dir
 
 
 def load(folder: Path):
-    for name in ("draft_info.json", "draft_content.json"):
-        for p in [folder / name] + sorted(folder.glob(f"Timelines/*/{name}")):
-            if p.is_file():
-                raw = p.read_bytes()
-                try:
-                    return p, json.loads(raw.decode("utf-8-sig"))
-                except (UnicodeDecodeError, json.JSONDecodeError):
-                    return p, None
-    return None, None
+    """The timeline file CapCut saved last: 8.x re-saves draft_content.json and leaves draft_info.json
+    as the tool wrote it, other builds do the reverse."""
+    files = [p for name in ("draft_info.json", "draft_content.json")
+             for p in [folder / name] + sorted(folder.glob(f"Timelines/*/{name}")) if p.is_file()]
+    if not files:
+        return None, None
+    p = max(files, key=lambda f: f.stat().st_mtime)
+    try:
+        return p, json.loads(p.read_bytes().decode("utf-8-sig"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return p, None
 
 
 def summarize(data: dict) -> dict:

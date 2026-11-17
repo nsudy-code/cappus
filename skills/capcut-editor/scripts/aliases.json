@@ -158,5 +158,9 @@
     "multiply": "正片叠底", "color_dodge": "颜色减淡", "color_burn": "颜色加深",
     "linear_burn": "线性加深", "soft_light": "柔光", "hard_light": "强光", "screen": "滤色",
     "overlay": "叠加", "lighten": "变亮", "darken": "变暗"
+  },
+  "font": {
+    "montserrat": "Montserrat", "poppins_bold": "Poppins_Bold", "anton": "Anton", "bebas": "BebasNeue",
+    "futura": "Futura_LT_Pro", "playfair_italic": "PlayfairDisplay_Italic", "oswald_light": "Oswald_ExtraLight"
   }
 }

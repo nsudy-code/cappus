@@ -13,7 +13,8 @@ Two things make this work, and both are easy to get wrong without the bundled to
 
 1. **Only real CapCut resources.** Every transition, effect, filter, animation and font is referenced
    by an internal CapCut ID. A made-up name ("Cinematic Glow") silently does nothing. The bundled
-   catalog holds ~6,000 real resources; `build_draft.py` refuses anything that is not in it.
+   catalog holds ~5,000 real resources (~1,200 free, ~3,800 Pro); `build_draft.py` refuses anything
+   that is not in it, and anything CapCut is known to no longer load (`scripts/unavailable.json`).
 2. **You cannot watch the result.** You never see the render, so taste has to come from looking at the
    footage first, planning deliberately, and following the craft guidance rather than piling on effects.
 
@@ -32,9 +33,23 @@ scripts with that interpreter. All scripts live in `<skill>/scripts/` and print 
 
 You need: the media files, where the video is going (decides aspect ratio), rough length, and the vibe.
 Infer what you can and state your assumptions instead of asking a list of questions. Defaults:
-vertical 1080x1920 at 30 fps, free CapCut resources only, 15-40 s for short-form.
-Only use Pro resources (`"allow_pro": true`) if the user says they have CapCut Pro - otherwise the
-project opens fine but export is blocked behind a paywall, which is a nasty surprise.
+vertical 1080x1920 at 30 fps, 15-40 s for short-form.
+
+**Know the user's CapCut plan.** Run `python scripts/tier.py` at the start. It prints the saved plan:
+
+- `pro`: the full catalog is open, and Pro items are allowed with no `allow_pro` in the spec. Pro
+  often has the more polished option for a job (film-stock looks, real camera moves, light leaks,
+  finer text animations - see the Pro palette in `references/editing-craft.md`). Choose the best
+  item for each shot whether it is free or Pro. The restraint rules stay the same.
+- `free`: only free items. The builder rejects Pro items and suggests free ones.
+- `null` (never asked): ask once, in the same message as any other assumptions: "Do you have
+  CapCut Pro?" Save the answer with `tier.py pro` or `tier.py free`; it is remembered for later
+  sessions. Until then, stay free-only. Do not ask again once it is saved.
+
+Pro matters at export: the account that exports needs Pro, or the export is blocked behind a
+paywall even though the draft opens and previews fine. If a Pro user says the draft is for someone
+on free CapCut, set `"allow_pro": false` in that spec. If someone tells you their plan changed,
+update it with `tier.py`.
 
 ### 2. Look at the footage before deciding anything
 
@@ -71,7 +86,7 @@ Minimal shape (full reference: `references/edit-spec.md`):
   "name": "Bali trip reel",
   "width": 1080, "height": 1920, "fps": 30,
   "styles": {"title": {"size": 14, "bold": true, "stroke": {"color": "#000000", "width": 45},
-                       "intro": "pop", "outro": "fade_out"}},
+                       "intro": "zoom_in", "outro": "fade_out"}},
   "video": [
     {"id": "hook", "src": "surf.mp4", "in": 3.2, "out": 5.0, "fit": "cover", "motion": "push_in",
      "transition": {"name": "white_flash", "duration": 0.3}},
@@ -100,11 +115,14 @@ How the pieces behave:
 
 ```bash
 python scripts/catalog.py kinds                       # the 15 kinds and how many are free
-python scripts/catalog.py transition                  # curated free picks with English aliases
+python scripts/catalog.py transition                  # curated picks with English aliases
 python scripts/catalog.py scene_effect glitch flash   # keyword search
 python scripts/catalog.py scene_effect shake --params # slider names; params are 0-100 in that order
-python scripts/catalog.py filter --all                # every free filter, incl. un-aliased ones
+python scripts/catalog.py filter --all                # every filter, incl. un-aliased ones
 ```
+
+The catalog follows the user's plan: with `pro` it lists free and Pro items (marked `PRO`), and with
+`free` or unset it lists free items only. `--free` / `--pro` override that for one search.
 
 Most original names are Chinese because that is what CapCut ships internally; CapCut shows the
 localized name in its UI. You can read them - `--all` lists hundreds more options than the aliased
@@ -118,7 +136,7 @@ python scripts/build_draft.py edit.json           # writes the draft into CapCut
 ```
 
 `--check` prints the resolved timeline. Read it: confirm the total duration, that text sits where you
-meant, and that nothing runs past the main track. Fix every reported problem and re-check; do not
+meant, that nothing runs past the main track, and that `pro_allowed` matches the user's plan. Fix every reported problem and re-check; do not
 remove a feature just to make an error go away without understanding it.
 
 To revise after feedback, edit the spec and rebuild with `--overwrite`. This only ever replaces drafts
@@ -138,7 +156,15 @@ Tell the user:
 - that you have not watched the render, plus the two or three things most worth eyeballing (text
   size/position, a specific transition, music level against speech);
 - anything you could not do in the draft and how to do it in CapCut in one click
-  (see `references/capcut-notes.md`).
+  (see `references/capcut-notes.md`);
+- if the build report lists `pro_resources`: that the draft uses Pro items (name them) and the
+  exporting account needs CapCut Pro.
+
+If the user then reports "animation loss", a missing effect or a wrong font, run
+`python scripts/check_resources.py read "<draft name>"` (after they have opened the draft in CapCut
+and gone back to the home screen). It lists the catalog items CapCut could not load, under `failed`
+and `not_confirmed`. Replace both in the spec and rebuild. `--save` records the `failed` ones so the
+builder rejects them from now on (`references/capcut-notes.md`).
 
 Source media is linked, not copied - warn them not to move or delete the files.
 
@@ -167,6 +193,7 @@ The full guidance is in `references/editing-craft.md`. The rules that matter mos
 - `references/edit-spec.md` - every field of the spec, units, coordinate system, examples. Read it when
   writing anything beyond the minimal shape above.
 - `references/editing-craft.md` - pacing, genre recipes (talking head, beat-synced montage, cinematic
-  vlog, product promo, photo slideshow), and the effect/transition/filter palette by mood.
+  vlog, product promo, photo slideshow), and the effect/transition/filter palette by mood, with a
+  separate Pro palette for CapCut Pro users.
 - `references/capcut-notes.md` - what is and is not possible in a generated draft, CapCut-side
   follow-ups, and troubleshooting when a draft does not show up or a resource is missing.

@@ -1,0 +1,48 @@
+{
+  "name": "cappus-demo-pro",
+  "note": "CapCut Pro demo: needs Pro allowed (tier.py pro, or build with --allow-pro). Media from make_test_media.py.",
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "styles": {
+    "title": {
+      "size": 13, "bold": true, "color": "#FFFFFF", "y": 0.55, "font": "chonk",
+      "shadow": {"color": "#000000", "opacity": 0.6, "distance": 5},
+      "intro": {"name": "letter_reveal", "duration": 0.6}, "outro": {"name": "blur_glow", "duration": 0.4}
+    }
+  },
+  "video": [
+    {
+      "id": "hook", "src": "media/landscape.mp4", "in": 0.5, "out": 3.0, "fit": "cover",
+      "intro": "lumin_flash", "filter": {"name": "kodak_500t", "intensity": 70},
+      "transition": {"name": "film_burn", "duration": 0.6}
+    },
+    {
+      "id": "b", "src": "media/vertical.mp4", "in": 1.0, "out": 3.5,
+      "filter": {"name": "cinematic_dusk", "intensity": 60},
+      "effects": [{"name": "handheld"}],
+      "transition": {"name": "light_leaks", "duration": 0.6}
+    },
+    {
+      "id": "wide", "src": "media/landscape.mp4", "in": 4.0, "out": 6.5,
+      "fit": "contain", "background": "blur",
+      "transition": {"name": "snap_zoom", "duration": 0.3}
+    },
+    {
+      "id": "still", "src": "media/photo.png", "duration": 2.5, "fit": "cover",
+      "motion": "push_in", "outro": "old_tv"
+    }
+  ],
+  "audio": [
+    {"src": "media/music.mp3", "at": 0, "end": "end", "volume": 0.5, "fade": {"in": 0.3, "out": 1.0}}
+  ],
+  "texts": [
+    {"text": "CAPPUS PRO", "at": 0.3, "end": "@hook.end-0.2", "style": "title"},
+    {"text": "film look + camera moves", "at": "@wide+0.2", "duration": 1.8, "style": "title",
+     "size": 8, "y": -0.5, "intro": "golden_dust", "loop": "shine"}
+  ],
+  "effects": [
+    {"name": "bokeh_leak", "at": "@wide", "duration": "@wide"},
+    {"name": "hollywood_glow", "at": "@still", "end": "end"}
+  ]
+}

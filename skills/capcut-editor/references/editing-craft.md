@@ -10,6 +10,7 @@ so lean on these rules and on what you saw in the contact sheets.
 - [Structure: hook, body, payoff](#structure-hook-body-payoff)
 - [Genre recipes](#genre-recipes)
 - [Palette by mood](#palette-by-mood)
+- [Pro palette (CapCut Pro users)](#pro-palette-capcut-pro-users)
 - [Text and captions](#text-and-captions)
 - [Sound](#sound)
 - [Reframing between aspect ratios](#reframing-between-aspect-ratios)
@@ -101,7 +102,7 @@ the user asks. Trim more than feels comfortable; the first draft is almost alway
 ### Product promo / ad
 
 1. Hook with the product in action or the problem it solves, not the logo.
-2. One feature per shot, with a short text label (2-4 words) and a clean intro like `pop` or
+2. One feature per shot, with a short text label (2-4 words) and a clean intro like `zoom_in` or
    `slide_up`; consistent position for every label.
 3. Punchy transitions on beats: `push_left`/`slide_left` families, `zoom`-style intros, `glitch` only if
    the brand is techy.
@@ -124,16 +125,48 @@ All names below are aliases from the catalog (free). Search for more with `catal
 
 | mood | transitions | scene effects | filters | text animations |
 |---|---|---|---|---|
-| Hype / energetic | `white_flash`, `whip_horizontal`, `glitch`, `shake`, `zoom` style intros (`dynamic_zoom_in`) | `shake`, `flash_white`, `strobe`, `chromatic_glitch`, `beat_shots`, `repeat_zoom` | `vivid`, `high_saturation`, `cyberpunk` | `pop`, `bounce_up`, `glitch`, loop `pulse` |
-| Clean / modern | `slide_left`, `push_left`, `wipe_left`, `blur` | `slight_zoom`, `light_shake` (low) | `clear`, `natural`, `cool` | `slide_up`, `fade_in`, `reveal_up`, `word_by_word` |
+| Hype / energetic | `white_flash`, `whip_horizontal`, `glitch`, `shake`, `zoom` style intros (`dynamic_zoom_in`) | `shake`, `flash_white`, `strobe`, `chromatic_glitch`, `beat_shots`, `repeat_zoom` | `vivid`, `high_saturation`, `cyberpunk` | `punch_in`, `zoom_in`, `glitch`, loop `word_pop` |
+| Clean / modern | `slide_left`, `push_left`, `wipe_left`, `blur` | `slight_zoom`, `light_shake` (low) | `clear`, `natural`, `cool` | `slide_up`, `fade_in`, `reveal_up`, `dissolve_in` |
 | Cinematic | `dissolve`, `fade_black`, `blur`, `light_beam` | `cinematic_bars`, `film`, `noise` (low), `film_leak`, `vignette` | `teal_orange`, `gold200`, `dunkirk`, `kraft` | `fade_in`, `blur_in`, letter-spaced titles |
 | Retro / nostalgic | `old_film`, `retro_projector`, `memory`, `shutter` | `retro_dv`, `dv_texture`, `bw_vhs`, `old_photo`, `70s`, `1998`, `tv_on` | `vhs`, `1980`, `retro`, `sepia`, `silent_film` | `typewriter`, `flicker` |
 | Dreamy / soft | `dissolve`, `glare_dissolve`, `blur`, `bloom` | `dream`, `soft_light`, `halo`, `sparkle`, `petals`, `fireflies` | `peach`, `gentle`, `milk_green`, `white_tea` | `blur_in`, `fade_in`, loop `float` |
 | Techy / glitch | `glitch`, `color_glitch`, `chromatic_glitch`, `mosaic` | `chromatic`, `bend_glitch`, `snow_glitch`, `glitch_lines`, `interlace` | `cyberpunk`, `cold_blue`, `night_vision` | `glitch`, `glitch_typewriter`, loop `glitch_flicker` |
-| Funny / meme | `spin_cw`, `quake`, `bounce` | `shake`, `fisheye`, `big_head` (character), `question_marks`, `freeze_frame` | none | `pop`, `cute_bounce`, loop `shake` |
+| Funny / meme | `spin_cw`, `quake`, `bounce` | `shake`, `fisheye`, `big_head` (character), `question_marks`, `freeze_frame` | none | `somersault`, `elastic`, loop `random_bounce` |
 
 Effect durations: hits 0.2-0.6 s; atmosphere (grain, bars, light leaks) for whole sections.
 Transition durations: 0.2-0.4 s for fast/hype, 0.4-0.8 s for clean, 0.6-1.2 s for dissolves.
+
+## Pro palette (CapCut Pro users)
+
+Use this only when Pro is allowed (`tier.py` says `pro`). Pro is not a reason to add more effects:
+the same restraint applies. What Pro adds is better versions of the same jobs, such as film-stock
+looks, real camera-move effects, light leaks and more refined text animations. Mix freely with the
+free palette above and pick whichever item fits the shot best. All names are aliases from
+`aliases_pro.json`. They were chosen by name, so check the first use of any pick in the preview.
+
+Every curated item in both palettes (animations, fonts, transitions, effects and filters) was
+checked in CapCut 9.8.0 with `check_resources.py`. Items that failed are rejected by the builder, so
+a rejection means "pick another", not "fix the name".
+
+| mood | transitions | scene effects | filters | text animations |
+|---|---|---|---|---|
+| Hype / energetic | `snap_zoom`, `zoom_shake`, `whip_tear`, `hyper_zoom`, `power_zoom`, `shockwave` | `camera_beats`, `beat_zoom`, `beat_pull`, `hard_strobe`, `flash_cam`, `glitch_burst` | `hd_enhance`, `pop_90s` | `spring`, `random_drop`, `chromatic_trail`, loop `zoom_pulse` |
+| Clean / modern | `quick_zoom`, `blur_pan`, `swipe_left`, `smooth_fade`, `lens_blur` | `soft_glow`, `depth_sweep`, `fluted_glass`, `window_light` | `clean_white`, `enhance`, `premium_gray` | `letter_reveal`, `feather_wipe_right`, `glow_scan` |
+| Cinematic | `film_burn`, `light_leaks`, `lens_flare`, `long_exposure`, `smooth_fade` | `hollywood_glow`, `bokeh_leak`, `film_leak_3`, `tyndall_focus`, `golden_hour` | `cinematic_dusk`, `kodak_500t`, `wong_kar_wai`, `oppenheimer`, `dark_cinema`, `blue_hour` | `letter_reveal`, `blur_glow` |
+| Retro / nostalgic | `film_roll`, `film_cut`, `retro_leak`, `retro_film`, `tv_flicker` | `vhs_tape`, `vx1000`, `ccd`, `digicam`, `old_documentary`, `film_border` | `kodak_gold200`, `fuji`, `retro_90s`, `throwback`, `yellowed`, `friends_90s` | `retro_typewriter`, `cursor_type`, loop `vhs` |
+| Dreamy / soft | `star_dissolve`, `soft_breath`, `dreamy_shift`, `cloud_reveal` | `dreamy_shimmer`, `dream_fireflies`, `star_bloom`, `petal_rain`, `bokeh`, `glitter` | `sun_drenched`, `dewy_skin`, `before_sunset`, `warm_sun` | `twinkle`, `golden_dust`, loop `shine` |
+| Techy / glitch | `digital_matrix`, `hologram`, `liquid_glitch`, `tv_glitch`, `laser_cut` | `cyber_glitch`, `holo_scan`, `aurora_scan`, `liquid_metal`, `neon_edge` | `cyber_2077`, `cyber_blue`, `tokyo_night`, `neon` | `glitch_flash`, `laser_engrave`, `chromatic_trail`, loop `glitch_flicker` |
+| Fun / social | `comic_tear`, `comic_panels`, `photo_collage`, `polaroid`, `magic_heart` | `speed_lines`, `comic_frame`, `notification`, `like_post`, `heart_burst` | `pop_90s`, `barbie` | `wave_bounce`, `random_drop`, out `wave_pop`, loop `light_bounce` |
+| Food / product | `quick_zoom`, `before_after`, `compare_split` | `close_up`, `closeup_push`, `color_splash`, `hdr` | `hd_food`, `hd_enhance`, `clean_white` | `feather_wipe_right`, `spring` |
+
+Pro camera-move scene effects (`handheld`, `follow_cam`, `push_pull`, `dolly_back`, `close_up`,
+`orbit_360`, `zoom_cam`) are an alternative to the `motion` presets on static shots. Use one per
+shot, never together with `motion` on the same clip, and keep their intensity sliders low (30-50).
+
+Pro fonts with an alias (`catalog.py font`): `chonk`, `bulgera`, `power_pow` for bold
+headlines; `elegant_script`, `pixie_script`, `dreamer` for elegant or soft styles; `markerist`,
+`biro_sloppy`, `doodle` for a handwritten feel; `pixel_game`, `bytebit` for retro gaming. Voice
+clean-up for talking heads: audio effects `voice_focus`, `voice_crisp`, `podcast`.
 
 ## Text and captions
 
@@ -145,8 +178,8 @@ Transition durations: 0.2-0.4 s for fast/hype, 0.4-0.8 s for clean, 0.6-1.2 s fo
 - Do not cover faces or the product - check where the subject is in the contact sheet and move text.
 - Language: write text in the language the user wrote in, unless they say otherwise. Check the font
   supports it (many decorative fonts are Latin-only).
-- Good free fonts: `Montserrat`, `Poppins_Bold`, `Anton` and `BebasNeue` (condensed, punchy titles),
-  `Futura_LT_Pro`, `PlayfairDisplay_Italic` (elegant), `Oswald_ExtraLight` (thin, cinematic).
+- Good free fonts: `montserrat`, `poppins_bold`, `anton` and `bebas` (condensed, punchy titles),
+  `futura`, `playfair_italic` (elegant), `oswald_light` (thin, cinematic).
 
 ## Sound
 

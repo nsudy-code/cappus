@@ -8,12 +8,12 @@
       "size": 14, "bold": true, "color": "#FFFFFF", "y": 0.55,
       "stroke": {"color": "#000000", "width": 45},
       "shadow": {"color": "#000000", "opacity": 0.7, "distance": 6},
-      "intro": {"name": "pop", "duration": 0.35}, "outro": {"name": "fade_out", "duration": 0.25}
+      "intro": {"name": "zoom_in", "duration": 0.35}, "outro": {"name": "fade_out", "duration": 0.25}
     },
     "caption": {
       "size": 9, "bold": true, "color": "#FFE600", "y": -0.55,
       "stroke": {"color": "#000000", "width": 40},
-      "intro": {"name": "bounce_up", "duration": 0.15}
+      "intro": {"name": "slide_up", "duration": 0.15}
     }
   },
   "video": [

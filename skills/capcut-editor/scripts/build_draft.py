@@ -6,6 +6,9 @@
   build_draft.py spec.json --overwrite      # replace a draft previously written by this tool
   build_draft.py spec.json --drafts-dir D   # write somewhere else
 
+CapCut Pro resources are allowed when, in order of precedence: --allow-pro / --free-only is
+given, else the spec's "allow_pro", else the user's saved plan (tier.py pro). Otherwise free only.
+
 The spec format is documented in references/edit-spec.md.
 """
 from __future__ import annotations
@@ -19,7 +22,7 @@ import time
 import uuid
 from pathlib import Path
 
-from _common import SpecError, cc, find_drafts_dir, label, param_names, resolve
+from _common import SpecError, cc, find_drafts_dir, label, param_names, resolve, user_tier
 
 from pycapcut import assets as cc_assets
 from pycapcut.script_file import ScriptFile
@@ -106,11 +109,19 @@ def named(value, ctx):
 
 
 class Builder:
-    def __init__(self, spec: dict, base_dir: Path, allow_pro: bool):
+    def __init__(self, spec: dict, base_dir: Path, allow_pro=None):
         check_keys(spec, TOP_KEYS, "spec")
         self.spec = spec
         self.base = base_dir
-        self.allow_pro = bool(allow_pro or spec.get("allow_pro"))
+        if allow_pro is not None:
+            self.allow_pro, self.pro_source = bool(allow_pro), "command line"
+        elif "allow_pro" in spec:
+            self.allow_pro, self.pro_source = bool(spec["allow_pro"]), "spec \"allow_pro\""
+        else:
+            tier, _ = user_tier()
+            self.allow_pro = tier == "pro"
+            self.pro_source = f"user plan: {tier}" if tier else "user plan not set (tier.py), free only"
+        self.allow_unavailable = False  # check_resources.py turns this on to re-test blocked items
         self.width = int(spec.get("width", 1080))
         self.height = int(spec.get("height", 1920))
         self.fps = int(spec.get("fps", 30))
@@ -129,7 +140,7 @@ class Builder:
 
     # ---------- helpers ----------
     def res(self, kind, name):
-        member = resolve(kind, name, self.allow_pro)
+        member = resolve(kind, name, self.allow_pro, self.allow_unavailable)
         if getattr(member.value, "is_vip", False):
             self.pro_used.append(f"{kind}: {label(kind, member)}")
         self.used.setdefault(kind, set()).add(label(kind, member))
@@ -818,8 +829,10 @@ class Builder:
                 "the tail will show a black frame. Trim those items with \"end\": \"end\" or extend the main track.")
 
     def report(self) -> dict:
+        pro = sorted(set(self.pro_used))
         return {
             "canvas": f"{self.width}x{self.height}@{self.fps}",
+            "pro_allowed": f"{'yes' if self.allow_pro else 'no'} ({self.pro_source})",
             "duration": sec(self.script.duration),
             "main_track_end": sec(self.main_end),
             "tracks": [f"{t.track_type.name}:{t.name} ({len(t.segments)})" for t in self.script.tracks.values()],
@@ -829,7 +842,9 @@ class Builder:
                 for r in sorted(self.timeline, key=lambda r: (r["start"], r["kind"]))
             ],
             "resources": {k: sorted(v) for k, v in self.used.items()},
-            "pro_resources": sorted(set(self.pro_used)),
+            "pro_resources": pro,
+            **({"pro_note": "Exporting this draft needs CapCut Pro on the account that exports it."}
+               if pro else {}),
             "warnings": self.warnings,
         }
 
@@ -843,6 +858,10 @@ def write_draft(builder: Builder, drafts_dir: Path, name: str, overwrite: bool, 
             raise SpecError(f"a draft named '{name}' already exists. Change spec.name, or pass --overwrite to replace it.")
         if not (target / MARKER).is_file():
             raise SpecError(f"'{name}' exists but was not created by this tool, so it will not be overwritten. Pick another name.")
+        if (target / ".locked").exists():
+            raise SpecError(f"'{name}' is open in CapCut right now; it would overwrite this build when it saves. "
+                            "Ask the user to go back to CapCut's home screen, then build again. (If CapCut is "
+                            "closed, a stale .locked file is left in the draft folder.)")
         shutil.rmtree(target)
     target.mkdir(parents=True)
     content = builder.script.dumps()
@@ -868,7 +887,11 @@ def main() -> int:
     ap.add_argument("--check", action="store_true", help="validate and print the timeline without writing")
     ap.add_argument("--overwrite", action="store_true", help="replace an existing draft made by this tool")
     ap.add_argument("--drafts-dir", help="CapCut draft folder (auto-detected by default)")
-    ap.add_argument("--allow-pro", action="store_true", help="permit CapCut Pro resources")
+    tier = ap.add_mutually_exclusive_group()
+    tier.add_argument("--allow-pro", dest="allow_pro", action="store_const", const=True,
+                      help="permit CapCut Pro resources for this build")
+    tier.add_argument("--free-only", dest="allow_pro", action="store_const", const=False,
+                      help="reject CapCut Pro resources for this build")
     args = ap.parse_args()
 
     spec_path = Path(args.spec).resolve()

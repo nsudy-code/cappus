@@ -73,9 +73,54 @@ These have no catalog. To reuse one: ask the user to add it once to any draft by
 ## Pro resources
 
 Items marked PRO in the catalog need a CapCut Pro subscription to export. The draft still opens and
-previews, which hides the problem until export. The builder rejects them unless the spec sets
-`"allow_pro": true`; only set it when the user says they have Pro, and list the Pro items you used
-(`pro_resources` in the build report) so they know what to swap if export complains.
+previews, which hides the problem until export.
+
+The user's plan is saved per user by `tier.py` (`~/.cappus/config.json`; the `CAPPUS_TIER` env var
+overrides it). The builder decides whether Pro items are allowed in this order:
+
+1. `--allow-pro` / `--free-only` on the command line;
+2. `"allow_pro"` in the spec;
+3. the saved plan (`pro` allows them; `free` or unset does not).
+
+The build report shows the decision in `pro_allowed` and lists every Pro item used in
+`pro_resources`. Mention those items at handover, so the user knows what to swap if a free account
+ever has to export the draft. To make a free-account copy of a Pro edit, rebuild the same spec with
+`--free-only` under a new `name`, and replace each rejected item with one of the suggested free
+alternatives.
+
+## Items CapCut no longer loads ("animation loss")
+
+The catalog comes from pycapcut, and CapCut has since withdrawn some of its ids. Such an item looks
+fine in the spec and the build, but CapCut cannot download it: an animation shows an "animation
+loss" label on the clip, and a font falls back to the default. Items found this way are listed in
+`scripts/unavailable.json`. The builder rejects them with alternatives, and `catalog.py` hides them
+(`--show-broken` lists them).
+
+To find more, use `check_resources.py`:
+
+- `check_resources.py read "<draft>"` reads a draft that CapCut has opened and lists every catalog
+  item that failed to load. Use it when the user reports "animation loss" or a wrong font, then swap
+  the failed items in the spec and rebuild.
+- `check_resources.py probe` builds a `cappus-check` draft containing every curated animation and
+  font (`--kinds all` adds transitions, filters and effects; `--every` uses the whole catalog, not
+  only curated picks). The user opens it in CapCut, plays it through once and returns to the home
+  screen. `check_resources.py read --save` then records the failures in `unavailable.json` and
+  clears items that load again.
+- CapCut writes what it downloaded only when the user leaves the editor, so `read` refuses a draft
+  that is still open. CapCut also stops downloading when one draft asks for too many items: a
+  1,500-item draft left most animations unloaded, while ~270 loaded fully. `probe` therefore splits
+  big checks into several drafts (`cappus-check-1`, `-2`, ...). The user opens them one at a time,
+  plays each through and returns to the home screen between them; then pass all their names to
+  `read`. `read` saves a failure only when CapCut was downloading that kind in that draft (new
+  items of it arrived, and not only before most of the failures). Other failures are listed as
+  `not_confirmed`: replace them in the draft, but they are not recorded.
+
+State as of CapCut 9.8.0 (Windows): 377 of the catalog's 941 animations no longer load (57 of 256
+free, 320 of 685 Pro), mostly older intros and outros. Every curated alias outside the blocklist
+loads, and so do all curated transitions, filters, effects and fonts. Prefer curated aliases;
+an uncurated animation is fine as long as the builder accepts it.
+
+`unavailable.json` is part of the skill, so commit it to share the result with the team.
 
 ## Troubleshooting
 
@@ -84,7 +129,7 @@ previews, which hides the problem until export. The builder rejects them unless 
 | Draft not in the project list | CapCut was open during the build: go back to home or restart it. Custom drafts location: rebuild with `--drafts-dir`. |
 | Draft opens but the timeline is empty | Very new CapCut builds may read `Timelines/<id>/draft_info.json`. Report the CapCut version (Settings > About) - this needs a builder update; nothing in the spec will fix it. |
 | An effect/transition shows a download spinner | CapCut downloads resources on first use; needs internet. Wait, then it plays. |
-| An effect does nothing / shows a missing icon | Rare catalog entries are region-locked or retired. Replace it with another item from the same `catalog.py` search. |
+| "animation loss", a missing icon, or a font that falls back to the default | CapCut no longer serves that catalog item. Run `check_resources.py read "<draft>"`, replace what it lists, rebuild, and record it with `--save` (see above). |
 | "Media offline" | Source files moved or renamed. Relink in CapCut, or fix `src` and rebuild. |
 | Text too big/small | Font size is a first guess - adjust `size` in the style and rebuild, or resize in CapCut. |
 | Vertical phone video shows sideways | The builder corrects for rotation flags; if it still happens, set `transform.rotation` 90/-90 on that clip. |

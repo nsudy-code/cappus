@@ -24,7 +24,7 @@ One JSON object. All times are **seconds**. Unknown keys are rejected (typos get
 | `name` | spec file name | Draft name shown in CapCut. Also the folder name. |
 | `width`, `height` | 1080, 1920 | Canvas. 9:16 = 1080x1920, 16:9 = 1920x1080, 1:1 = 1080x1080, 4:5 = 1080x1350. |
 | `fps` | 30 | Match the footage when it is consistently 24/25/60. |
-| `allow_pro` | false | Permit CapCut Pro resources. Only when the user has a subscription. |
+| `allow_pro` | user's plan | Omit it normally: Pro is then allowed exactly when the user's saved plan is Pro (`tier.py`). Set `false` to force a free-only draft (e.g. it will be exported from a free account), `true` only if the user has Pro but it is not saved. |
 | `styles` | {} | Named text styles, reused via `"style": "<name>"`. |
 | `video` | required | Main-track clips, in playback order. |
 | `overlays`, `audio`, `texts`, `captions`, `effects`, `filters`, `stickers` | [] | See below. |
@@ -128,7 +128,7 @@ light-leak/dust footage with `"blend": "screen"`, logo PNG in a corner.
 "styles": {
   "title": {"font": "Poppins_Bold", "size": 14, "bold": true, "color": "#FFFFFF", "y": 0.5,
             "stroke": {"color": "#000000", "width": 45},
-            "intro": {"name": "pop", "duration": 0.3}, "outro": "fade_out"}
+            "intro": {"name": "zoom_in", "duration": 0.3}, "outro": "fade_out"}
 },
 "texts": [
   {"text": "3 THINGS I WISH\nI KNEW", "at": 0.2, "end": "@hook.end", "style": "title"},
@@ -200,7 +200,8 @@ better to tell the user to drop stickers in by hand.
 ## Resource names and parameters
 
 Any name field accepts the English alias or the original CapCut name, case/space/underscore-insensitive.
-Pro resources are rejected unless `allow_pro` is true, and the error lists free alternatives.
+Pro resources are rejected unless Pro is allowed (saved plan `pro`, `allow_pro: true`, or
+`--allow-pro`), and the error lists free alternatives. `--free-only` forces a free build.
 
 `params` drive the effect's sliders, each **0-100** like in CapCut's UI. Give a list in catalog order
 (`null` keeps a default) or an object keyed by parameter name:
