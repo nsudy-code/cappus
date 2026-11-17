@@ -172,6 +172,20 @@ headlines; `elegant_script`, `pixie_script`, `dreamer` for elegant or soft style
 `biro_sloppy`, `doodle` for a handwritten feel; `pixel_game`, `bytebit` for retro gaming. Voice
 clean-up for talking heads: audio effects `voice_focus`, `voice_crisp`, `podcast`.
 
+Background removal (`"remove_bg": true`, CapCut's Auto removal) cuts the person or main subject out
+of a clip. Use it when the new background has a job to do, not on every shot:
+
+- **Subject pop**: the shot on the main track with the `blur` effect and/or saturation keyframes at
+  -1 (two points, start and end), and the same file as an overlay with `"remove_bg": true`, `"at":
+  "@shot"`, `"end": "@shot.end"`, the same `in` and `fit`, and `"mute": true`. The person stays sharp
+  and in color while the background blurs or goes grey.
+- **New background**: the background (B-roll, a still, a branded color card) on the main track, and
+  the person as an overlay with `remove_bg`. For example, a talking head over the thing they are
+  talking about.
+
+It works best with one clear subject that stands out from the background. Hair, motion blur and
+busy backgrounds give rough edges, so name those shots as things to check at handover.
+
 ## Text and captions
 
 - Readable at phone size in 0.5 s: 2-6 words per line, max 2 lines, heavy weight, white or bright

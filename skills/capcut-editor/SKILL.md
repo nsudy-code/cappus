@@ -180,7 +180,10 @@ Tell the user:
 - anything you could not do in the draft and how to do it in CapCut in one click
   (see `references/capcut-notes.md`);
 - if the build report lists `pro_resources`: that the draft uses Pro items (name them) and the
-  exporting account needs CapCut Pro.
+  exporting account needs CapCut Pro;
+- if any clip uses `remove_bg`: that CapCut cuts those clips out the first time it opens the draft.
+  This takes a few seconds per clip (the clip shows "Applying Auto cutout"), and the background
+  stays visible until it finishes.
 
 If the user then reports "animation loss", a missing effect or a wrong font, run
 `python scripts/check_resources.py read "<draft name>"` (after they have opened the draft in CapCut
