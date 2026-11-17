@@ -1,6 +1,6 @@
 ---
 name: capcut-editor
-description: Edit videos by producing a real CapCut draft project that the user opens and keeps editing in CapCut desktop - every cut, text, transition, effect, filter, animation and keyframe stays editable on the timeline. Use this whenever the user wants a video edited, cut, assembled, captioned, synced to music, reformatted for TikTok/Reels/Shorts, or made to "look cool" from their footage/photos/audio, and especially when they mention CapCut, a CapCut project/draft/template, or wanting to tweak the result themselves afterwards. Also use it to revise a draft this skill made earlier. Prefer this over rendering a flat MP4 with ffmpeg unless the user explicitly asks for a rendered file only.
+description: Edit videos by producing a real CapCut draft project that the user opens and keeps editing in CapCut desktop - every cut, text, transition, effect, filter, animation and keyframe stays editable on the timeline. Use this whenever the user wants a video edited, cut, assembled, captioned (including auto captions transcribed from the speech), synced to music, reformatted for TikTok/Reels/Shorts, or made to "look cool" from their footage/photos/audio, and especially when they mention CapCut, a CapCut project/draft/template, or wanting to tweak the result themselves afterwards. Also use it to revise a draft this skill made earlier. Prefer this over rendering a flat MP4 with ffmpeg unless the user explicitly asks for a rendered file only.
 ---
 
 # CapCut Editor
@@ -23,6 +23,9 @@ Two things make this work, and both are easy to get wrong without the bundled to
 ```bash
 python -m pip install -r <skill>/requirements.txt    # pycapcut + numpy
 ```
+
+Captions from speech need one more, optional package (see step 2):
+`python -m pip install -r <skill>/requirements-captions.txt` (faster-whisper).
 
 `ffmpeg`/`ffprobe` must be on PATH. If `pip` targets a managed Python, create a venv and run the
 scripts with that interpreter. All scripts live in `<skill>/scripts/` and print JSON.
@@ -61,16 +64,34 @@ python scripts/probe.py clip1.mp4 --sheet <scratch_dir> --from 12 --to 18   # zo
 python scripts/probe.py clip1.mp4 --scenes        # shot changes inside a long file
 python scripts/probe.py talk.mp4 --silence        # speech segments, for cutting dead air
 python scripts/probe.py song.mp3 --beats          # bpm, beat times, downbeats, energy curve
+python scripts/transcribe.py talk.mp4             # what is said, with a time for every word
 ```
 
 Actually open the contact sheets with the Read tool. Choosing in/out points from filenames and
 durations alone produces edits that cut mid-gesture or hold on nothing. Zoom the sheet into a window
 whenever you need to place a cut precisely - sheet times are approximate (within one frame-step).
 
-If there is speech and the user wants captions, you need word or sentence timings. Use a transcript/SRT
-the user provides, or run a speech-to-text tool if one is available in the environment. If neither
-exists, say so and suggest CapCut's own **Auto captions** button on the finished draft - do not invent
-timings.
+**Speech.** When the footage has someone talking, transcribe it before you plan: the transcript tells
+you what is said and when, so you can cut on sentence boundaries, drop flubbed takes and repeats,
+open on the strongest line, and caption it. `transcribe.py` runs offline (faster-whisper) and writes
+a transcript beside the media (`talk.mp4` -> `talk.transcript.json`; the path is in its output), with
+every word's time in the source file. Running it again on the same file reuses that transcript. Read
+the `text` it prints; check names and anything under `low_confidence` or marked `(?)` with the user.
+
+- Not installed yet (exit code 3): ask once before installing, because it downloads about 0.6 GB the
+  first time (the package plus the default `small` model). Then run
+  `python -m pip install -r <skill>/requirements-captions.txt`.
+- Pass `--language id` (or `en`, ...) when you know it, and `--prompt "Name, Brand"` for spellings.
+  `--model large-v3-turbo` (~1.6 GB) is more accurate and slower; offer it if `small` gets words wrong.
+- With `small` on a laptop CPU it took about a third of the audio's length in testing. Run long files
+  in the background.
+- If the user declines the install, use their SRT/transcript if they have one, or suggest CapCut's
+  **Auto captions** on the finished draft. Never invent timings.
+
+Captions come from the transcript with `"captions": {"transcript": "talk.transcript.json", ...}`.
+The builder maps each word through the clips that play that file, so captions stay in sync after
+jump cuts, reordering and speed changes, and words in the parts you cut are left out
+(`references/edit-spec.md`).
 
 ### 3. Plan the edit, briefly, then write the spec
 

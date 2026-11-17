@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import sys
@@ -45,8 +46,15 @@ STYLE_KEYS = {
     "background", "intro", "outro", "loop", "effect_id", "bubble",
 }
 TEXT_KEYS = STYLE_KEYS | {"text", "at", "end", "duration", "track", "style", "keyframes", "note"}
-CAPTION_KEYS = {"srt", "cues", "words", "max_words", "max_chars", "max_gap", "uppercase", "offset",
-                "style", "track", "min_duration"}
+CAPTION_KEYS = {"transcript", "srt", "cues", "words", "source", "max_words", "max_chars", "max_gap",
+                "uppercase", "punctuation", "offset", "style", "track", "min_duration", "note"}
+NO_SPACE_LANGS = {"zh", "ja", "yue", "th", "lo", "my", "km", "bo"}  # written without spaces between words
+CUE_BREAK = ".?!,;:。，、！？"
+# Short words that should open a caption rather than end one (English and Indonesian).
+DANGLING = {"a", "an", "the", "to", "of", "in", "on", "at", "for", "and", "or", "but", "with", "from", "by",
+            "my", "your", "our", "their", "his", "her", "its", "di", "ke", "dari", "dan", "yang", "untuk",
+            "atau", "dengan", "pada", "dalam", "si", "sang", "para", "agar", "karena", "tapi", "tetapi"}
+_PUNCT = re.compile(r"(?<!\d)[.,!?;:…。，、！？]+|[.,!?;:…]+(?!\d)")
 FX_KEYS = {"name", "at", "end", "duration", "params", "track", "note"}
 FILTER_KEYS = {"name", "at", "end", "duration", "intensity", "track", "note"}
 STICKER_KEYS = {"resource_id", "at", "end", "duration", "transform", "track", "keyframes", "note"}
@@ -131,6 +139,7 @@ class Builder:
         self.pro_used: list = []
         self.used: dict = {}
         self.clips: dict = {}       # id -> (start_us, end_us)
+        self.plays: list = []       # audible media: (normcased path, src_start_us, src_dur_us, speed, start_us)
         self.timeline: list = []
         self.main_end = 0
         self._vmats: dict = {}
@@ -155,15 +164,20 @@ class Builder:
             except SpecError:
                 raise scene_err
 
-    def path(self, src, ctx) -> str:
+    def path(self, src, ctx, what="media file") -> str:
         if not isinstance(src, str) or not src:
             raise SpecError(f"{ctx}: \"src\" (media file path) is required")
         p = Path(src)
         if not p.is_absolute():
             p = self.base / p
         if not p.is_file():
-            raise SpecError(f"{ctx}: media file not found: {p}")
+            raise SpecError(f"{ctx}: {what} not found: {p}")
         return str(p.resolve())
+
+    def heard(self, src, tin, sdur, speed, start, volume):
+        """Remember where a media file is audible on the timeline (captions map speech through it)."""
+        if volume > 0:
+            self.plays.append((os.path.normcase(src), tin, sdur, speed, start))
 
     def vmat(self, src, ctx):
         p = self.path(src, ctx)
@@ -337,6 +351,9 @@ class Builder:
         )
         seg._base = base
         seg._mat = mat
+        if not photo:
+            self.heard(self.path(c.get("src"), ctx), tin, sdur, speed, start,
+                       0.0 if c.get("mute") else float(c.get("volume", 1.0)))
         return seg
 
     def keyframes(self, seg, kf, ctx, base=1.0, allowed=None):
@@ -550,6 +567,7 @@ class Builder:
                 vol = float(a.get("volume", 1.0))
                 seg = cc.AudioSegment(mat, cc.Timerange(start, int(round((tout - tin) / speed))),
                                       source_timerange=cc.Timerange(tin, tout - tin), speed=speed, volume=vol)
+                self.heard(self.path(a.get("src"), ctx), tin, tout - tin, speed, start, vol)
                 dur = seg.duration
                 if a.get("fade"):
                     check_keys(a["fade"], {"in", "out"}, f"{ctx}.fade")
@@ -685,13 +703,56 @@ class Builder:
             except (SpecError, ValueError) as e:
                 self.errors.append(str(e) if str(e).startswith(ctx) else f"{ctx}: {e}")
 
+    def caption_plays(self, source, ctx):
+        """Clips that make `source` audible, or None when the times are timeline seconds."""
+        if not source:
+            return None
+        p = Path(source)
+        p = (p if p.is_absolute() else self.base / p).resolve()
+        plays = [pl for pl in self.plays if pl[0] == os.path.normcase(str(p))]
+        if not plays:
+            raise SpecError(f"{ctx}: no clip plays {p.name} with its sound on, so that speech is not on the "
+                            "timeline. Add or unmute the clip, or set \"source\": null to read the caption "
+                            "times as timeline seconds.")
+        return plays
+
+    @staticmethod
+    def map_span(plays, s0, e0, whole):
+        """Source seconds -> [(timeline start, end, clip index)]. Words go where their middle is."""
+        if plays is None:
+            return [(s0, e0, 0)]
+        out = []
+        for k, (_, tin, sdur, speed, at) in enumerate(plays):
+            a, b = tin / 1e6, (tin + sdur) / 1e6
+            lo, hi = max(s0, a), min(e0, b)
+            if whole:
+                if not a <= (s0 + e0) / 2 < b:
+                    continue
+            elif hi - lo < min(0.2, (e0 - s0) / 2):
+                continue
+            out.append((at / 1e6 + (lo - a) / speed, at / 1e6 + (hi - a) / speed, k))
+        return out
+
     def caption_cues(self, cap, ctx):
-        sources = [k for k in ("srt", "cues", "words") if k in cap]
+        """Return ([(start_us, dur_us, text)], description)."""
+        sources = [k for k in ("transcript", "words", "srt", "cues") if k in cap]
         if len(sources) != 1:
-            raise SpecError(f"{ctx}: give exactly one of \"srt\", \"cues\" or \"words\"")
-        cues = []
-        if "srt" in cap:
-            raw = Path(self.path(cap["srt"], ctx)).read_text(encoding="utf-8-sig")
+            raise SpecError(f"{ctx}: give exactly one of \"transcript\", \"words\", \"srt\" or \"cues\"")
+        joiner, source, words, cues = " ", cap.get("source"), None, []
+        if "transcript" in cap:
+            tpath = self.path(cap["transcript"], ctx, "transcript")
+            try:
+                data = json.loads(Path(tpath).read_text(encoding="utf-8-sig"))
+                words = list(data["words"])
+            except (OSError, ValueError, KeyError, TypeError):
+                raise SpecError(f"{ctx}: {tpath} is not a transcript made by transcribe.py")
+            if "source" not in cap:
+                source = data.get("source")
+            joiner = "" if data.get("language") in NO_SPACE_LANGS else " "
+        elif "words" in cap:
+            words = cap["words"]
+        elif "srt" in cap:
+            raw = Path(self.path(cap["srt"], ctx, "SRT file")).read_text(encoding="utf-8-sig")
             stamp = re.compile(r"(\d+):(\d+):(\d+)[,.](\d+)\s*-->\s*(\d+):(\d+):(\d+)[,.](\d+)")
             for block in re.split(r"\r?\n\s*\r?\n", raw.strip()):
                 lines = [ln for ln in block.splitlines() if ln.strip()]
@@ -705,30 +766,50 @@ class Builder:
                         if text:
                             cues.append([s0, e0, re.sub(r"<[^>]+>", "", text)])
                         break
-        elif "cues" in cap:
+        else:
             for c in cap["cues"]:
                 cues.append([float(c["start"]), float(c["end"]), str(c["text"])])
-        else:
-            max_words = int(cap.get("max_words", 3))
-            max_chars = int(cap.get("max_chars", 18))
-            max_gap = float(cap.get("max_gap", 0.6))
-            cur = None
-            for w in cap["words"]:
+
+        plays = self.caption_plays(source, ctx)
+        max_gap = float(cap.get("max_gap", 0.6))
+        total = dropped = 0
+        if words is not None:
+            items, seen = [], set()
+            for w in words:
                 word = str(w.get("word", w.get("text", ""))).strip()
                 if not word:
                     continue
-                s0, e0 = float(w["start"]), float(w["end"])
-                new = (cur is None or len(cur[3]) >= max_words or s0 - cur[1] > max_gap
-                       or len(" ".join(cur[3] + [word])) > max_chars or cur[3][-1][-1:] in ".?!,;:")
-                if new:
-                    cur = [s0, e0, "", [word]]
-                    cues.append(cur)
-                else:
-                    cur[1] = e0
-                    cur[3].append(word)
-            for c in cues:
-                c[2] = " ".join(c[3])
-                del c[3]
+                total += 1
+                spots = self.map_span(plays, float(w["start"]), float(w["end"]), True)
+                dropped += not spots
+                for s0, e0, k in spots:
+                    if (round(s0, 2), word) not in seen:  # the same speech heard on two tracks
+                        seen.add((round(s0, 2), word))
+                        items.append((s0, e0, word, k))
+            items.sort(key=lambda x: x[0])
+            max_words = int(cap.get("max_words", 3))
+            max_chars = int(cap.get("max_chars", 18))
+            groups, cur = [], None
+            for s0, e0, word, k in items:
+                hard = (cur is None or k != cur["k"] or s0 - cur["w"][-1][2] > max_gap
+                        or cur["w"][-1][0][-1:] in CUE_BREAK)
+                soft = not hard and (len(cur["w"]) >= max_words
+                                     or len(joiner.join([x[0] for x in cur["w"]] + [word])) > max_chars)
+                if hard or soft:
+                    carry = []
+                    if soft and max_words > 1 and len(cur["w"]) > 1 and cur["w"][-1][0].lower() in DANGLING:
+                        carry = [cur["w"].pop()]  # "the slow way", not "videos the / slow way"
+                    cur = {"k": k, "w": carry}
+                    groups.append(cur)
+                cur["w"].append((word, s0, e0))
+            for n, g in enumerate(groups):
+                s0, e0 = g["w"][0][1], g["w"][-1][2]
+                nxt = groups[n + 1] if n + 1 < len(groups) else None
+                if nxt and nxt["k"] == g["k"] and nxt["w"][0][1] - e0 < max_gap:
+                    e0 = nxt["w"][0][1]  # hold the words through short pauses instead of flickering
+                cues.append([s0, e0, joiner.join(x[0] for x in g["w"])])
+        elif plays is not None:
+            cues = [[s0, e0, text] for c0, c1, text in cues for s0, e0, _ in self.map_span(plays, c0, c1, False)]
         cues.sort(key=lambda c: c[0])
         offset = float(cap.get("offset", 0))
         min_d = float(cap.get("min_duration", 0.35))
@@ -737,12 +818,19 @@ class Builder:
             e0 = max(e0, s0 + min_d)
             if n + 1 < len(cues):
                 e0 = min(e0, cues[n + 1][0])
-            if e0 - s0 < 0.05 or s0 + offset < 0:
+            if cap.get("punctuation") is False:
+                text = re.sub(r"[ \t]{2,}", " ", _PUNCT.sub("", text)).strip()
+            if e0 - s0 < 0.05 or s0 + offset < 0 or not text:
                 continue
             if cap.get("uppercase"):
                 text = text.upper()
             out.append((us(s0 + offset), us(e0 - s0), text))
-        return out
+        desc = f"{len(out)} cues"
+        if plays is not None:
+            desc += f", synced to {len(plays)} clip(s) of {Path(source).name}"
+            if dropped:
+                desc += f"; {dropped} of {total} words fall in parts that were cut"
+        return out, desc
 
     def build_captions(self):
         caps = self.spec.get("captions")
@@ -754,7 +842,7 @@ class Builder:
                 check_keys(cap, CAPTION_KEYS, ctx)
                 st = {"size": 9, "y": -0.6, "bold": True, "stroke": {"color": "#000000", "width": 40}}
                 st.update(self.style_of({"style": cap.get("style")}, ctx))
-                cues = self.caption_cues(cap, ctx)
+                cues, desc = self.caption_cues(cap, ctx)
                 if not cues:
                     self.warnings.append(f"{ctx}: no caption cues found")
                 base = cap.get("track", "captions")
@@ -763,7 +851,7 @@ class Builder:
                     self.script.add_segment(seg, self.place(cc.TrackType.text, base, seg.target_timerange))
                 if cues:
                     self.timeline.append({"kind": "captions", "track": base, "id": None, "start": sec(cues[0][0]),
-                                          "end": sec(cues[-1][0] + cues[-1][1]), "what": f"{len(cues)} cues"})
+                                          "end": sec(cues[-1][0] + cues[-1][1]), "what": desc})
             except (SpecError, ValueError, KeyError) as e:
                 self.errors.append(str(e) if str(e).startswith(ctx) else f"{ctx}: {e}")
 

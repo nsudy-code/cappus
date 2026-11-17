@@ -46,7 +46,7 @@ text animations, word-level captions, stickers and fancy text by raw id.
 | want | do in CapCut |
 |---|---|
 | Speed ramp (curve speed) | Select clip > Speed > Curve. Or approximate in the spec: split the shot into consecutive clips with stepped `speed` values (e.g. 1.0 > 0.4 > 1.0). |
-| Auto captions from speech | Text > Auto captions (then style them). |
+| Auto captions, if `transcribe.py` cannot be installed | Text > Auto captions (then style them). Otherwise transcribe and caption in the spec, see `edit-spec.md`. |
 | Remove background / cutout | Select clip > Video > Remove BG. |
 | Freeze frame, reverse | Right-click clip > Freeze / Reverse. |
 | Auto reframe | Select clip > Auto reframe. |

@@ -53,6 +53,16 @@ python -m pip install "pycapcut==0.0.4" numpy
 Perintah ini memasang `pycapcut` (penulis draft CapCut) dan `numpy` (analisis beat lagu). Kalau
 belum terpasang, Claude juga akan memasangnya saat pertama kali dipakai.
 
+**Opsional, untuk caption otomatis dari suara:**
+
+```bash
+python -m pip install faster-whisper
+```
+
+Ini memasang Whisper versi offline untuk mengubah suara jadi teks. Pertama kali dipakai, ia
+mengunduh model sekitar 0,5 GB; setelah itu berjalan tanpa internet. Tidak wajib: kalau belum
+terpasang, Claude akan menawarkan memasangnya saat Anda pertama kali minta caption.
+
 ### Langkah 2: pasang skill ke Claude
 
 Pilih salah satu cara saja. Kalau dua-duanya dipakai, skill-nya terbaca dua kali.
@@ -142,8 +152,8 @@ cocok. Kalau Anda punya efek favorit di CapCut, sebut namanya; Claude akan menca
 
 **Talking head (review, tutorial, potongan podcast)**
 
-> Rapikan video D:\Konten\review-hp.mp4: buang jeda diam, kasih zoom bergantian di tiap potongan,
-> caption kata per kata pakai transkrip D:\Konten\review-hp.srt. Format 9:16.
+> Rapikan video D:\Konten\review-hp.mp4: buang jeda diam dan kalimat yang diulang, kasih zoom
+> bergantian di tiap potongan, dan caption kata per kata dari suaranya. Format 9:16.
 
 **Vlog sinematik**
 
@@ -168,13 +178,15 @@ cocok. Kalau Anda punya efek favorit di CapCut, sebut namanya; Claude akan menca
    momen yang tepat, bukan di tengah gerakan.
 3. **Menganalisis audio:** beat dan bagian paling bertenaga dari lagu, atau jeda diam pada video
    orang bicara.
-4. **Menyusun rencana:** pembuka (hook), isi, dan penutup, lengkap dengan waktu.
-5. **Menulis spec**, yaitu file JSON berisi resep edit. File ini disimpan di dekat bahan Anda dan
+4. **Mentranskrip ucapan** pada video orang bicara, lengkap dengan waktu tiap kata. Claude memakainya
+   untuk memotong di antara kalimat, membuang kalimat yang diulang, dan membuat caption.
+5. **Menyusun rencana:** pembuka (hook), isi, dan penutup, lengkap dengan waktu.
+6. **Menulis spec**, yaitu file JSON berisi resep edit. File ini disimpan di dekat bahan Anda dan
    menjadi bahan revisi nanti.
-6. **Memvalidasi spec:** semua nama efek dicocokkan dengan katalog CapCut, dan durasi serta posisi
+7. **Memvalidasi spec:** semua nama efek dicocokkan dengan katalog CapCut, dan durasi serta posisi
    teks diperiksa.
-7. **Menulis draft** ke folder proyek CapCut.
-8. **Melapor:** nama draft, alasan di balik edit, bagian yang perlu Anda cek, dan hal yang perlu
+8. **Menulis draft** ke folder proyek CapCut.
+9. **Melapor:** nama draft, alasan di balik edit, bagian yang perlu Anda cek, dan hal yang perlu
    diselesaikan di CapCut.
 
 Claude **tidak bisa menonton hasil render**. Karena itu selalu putar hasilnya di CapCut sebelum
@@ -232,7 +244,7 @@ menu di bawah mengikuti CapCut berbahasa Inggris.
 | Yang diinginkan | Cara di CapCut |
 |---|---|
 | Speed ramp (kurva kecepatan) | Pilih klip > Speed > Curve. Claude bisa meniru kasarnya dengan beberapa potongan berkecepatan berbeda. |
-| Caption otomatis dari suara | Text > Auto captions. Kalau Anda punya transkrip atau file SRT, Claude bisa membuat captionnya sendiri. |
+| Caption otomatis, kalau `faster-whisper` tidak dipasang | Text > Auto captions. Dengan `faster-whisper`, Claude membuat captionnya sendiri langsung di draft (lihat [bagian 9](#9-tips-agar-hasilnya-bagus)). |
 | Hapus background | Pilih klip > Video > Remove BG. |
 | Freeze frame, reverse | Klik kanan klip > Freeze / Reverse. |
 | Auto reframe | Pilih klip > Auto reframe. |
@@ -297,8 +309,11 @@ masing-masing.
   montase.
 - **Sebut momen terbaik kalau Anda tahu.** Claude melihat cuplikan gambar, bukan video utuh, jadi
   petunjuk "ombak besar di detik 40 klip 5" sangat membantu.
-- **Untuk caption video bicara, sertakan transkrip atau file SRT.** Tanpa itu, pakai Auto captions di
-  CapCut setelah draft jadi.
+- **Caption dari suara dibuat otomatis.** Claude mentranskrip ucapan secara offline, lalu caption
+  masuk ke draft sebagai teks biasa yang bisa Anda edit, dan tetap pas walau jeda sudah dibuang.
+  Sebutkan nama orang, merek, atau istilah khusus beserta ejaannya supaya tidak salah tulis. Kalau
+  ada kata yang salah, perbaiki langsung di CapCut atau minta Claude memakai model yang lebih akurat
+  (`large-v3-turbo`, unduhan sekitar 1,6 GB, lebih lambat). Sudah punya file SRT? Berikan saja.
 - **Pakai bahan berkualitas.** Video 60 fps bisa dibuat slow motion dengan mulus; 30 fps akan patah-patah.
 - **Revisi sedikit demi sedikit.** Dua atau tiga perubahan per permintaan lebih mudah dicek daripada
   sepuluh sekaligus.
@@ -315,7 +330,7 @@ masing-masing.
 | Teks terlalu besar atau kecil | Ukuran teks adalah tebakan awal. Minta Claude mengubahnya, atau ubah langsung di CapCut. |
 | Video HP tampil miring | Minta Claude memutar klip tersebut 90 derajat. |
 | Claude bilang `pycapcut` belum terpasang | Ulangi langkah install dependensi di bagian 2. |
-
+| Caption ada yang salah eja atau salah dengar | Beri tahu Claude ejaan yang benar (nama, merek, istilah). Claude mentranskrip ulang dengan petunjuk ejaan itu, atau dengan model yang lebih akurat. |
 ## 11. Menjalankan skrip sendiri
 
 Bagian ini opsional, untuk yang ingin memakai alatnya tanpa Claude atau ingin memahami cara kerjanya.
@@ -354,6 +369,16 @@ python skills/capcut-editor/scripts/probe.py klip.mp4 --sheet folder-output --fr
 ```
 
 Opsi lain: `--scenes` untuk mencari pergantian adegan dan `--silence` untuk mencari jeda diam.
+
+**Mentranskrip ucapan** (butuh `faster-whisper`):
+
+```bash
+python skills/capcut-editor/scripts/transcribe.py video.mp4 --language id --srt
+```
+
+Hasilnya `video.transcript.json` (waktu tiap kata) dan `video.srt` di sebelah file video. Pakai
+transkrip itu di spec dengan `"captions": {"transcript": "video.transcript.json"}`. Opsi lain:
+`--model large-v3-turbo` untuk hasil lebih akurat, `--prompt "Nama, Merek"` untuk petunjuk ejaan.
 
 **Membuat draft dari spec:**
 

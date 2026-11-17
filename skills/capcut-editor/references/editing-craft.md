@@ -77,16 +77,20 @@ the user asks. Trim more than feels comfortable; the first draft is almost alway
 
 ### Talking head / explainer / podcast clip
 
-1. `probe.py talk.mp4 --silence`; keep `sound_segments`, padding each by ~0.08-0.15 s so words are not
-   clipped. Each kept segment becomes its own main clip with the same `src` - that is a jump cut.
-2. Alternate framing at each jump: odd clips `transform.scale` 1.0, even clips 1.15-1.25 (centered on
+1. `transcribe.py talk.mp4` and `probe.py talk.mp4 --silence`. Read the transcript like a script:
+   mark the sentences worth keeping, the flubbed takes (a sentence said twice - keep the last clean
+   one), the false starts and long "umm" stretches. Whisper often leaves fillers out of the text, so
+   a gap between two word times with sound in it (`sound_segments`) is usually a filler or a breath.
+2. Each kept stretch becomes its own main clip with the same `src` - that is a jump cut. Put `in` about
+   0.08-0.15 s before the first word's `start` and `out` the same after the last word's `end`, and
+   check against `sound_segments` so no word is clipped. Cut between words, never inside one.
+3. Alternate framing at each jump: odd clips `transform.scale` 1.0, even clips 1.15-1.25 (centered on
    the face; adjust `y` so the head is not cropped). Hides the jump and adds energy.
-3. Captions: word timings grouped `max_words` 2-4, uppercase or bold, high-contrast stroke, placed in
-   the lower-middle. Highlight keywords with a separate text item in an accent color if it fits.
-4. B-roll overlays over the main clip when the speaker mentions something showable; mute them.
-5. Hook: start on the most interesting sentence, even if it is from the middle (reorder clips).
-6. Remember caption times shift when you remove gaps: compute each word's new timeline time
-   (original time - total gap removed before it).
+4. Captions: `{"transcript": "talk.transcript.json"}` with `max_words` 2-4, uppercase or bold,
+   high-contrast stroke, placed in the lower-middle. They follow the cuts automatically. Highlight
+   keywords with a separate text item in an accent color if it fits.
+5. B-roll overlays over the main clip when the speaker mentions something showable; mute them.
+6. Hook: start on the most interesting sentence, even if it is from the middle (reorder clips).
 7. No music, or quiet music (volume 0.1-0.2) ducked under speech.
 
 ### Cinematic vlog / mood piece
@@ -210,7 +214,9 @@ clean-up for talking heads: audio effects `voice_focus`, `voice_crisp`, `podcast
 - Slow motion on 24/30 fps footage (it stutters) - only slow down 50/60 fps sources.
 - Black bars from a wrong `fit`, or the subject cropped out by `cover`.
 - Clips held long after the action ended.
-- Captions that drift out of sync because gaps were removed and times were not recomputed.
+- Captions that drift out of sync: inline `words` or cues without a `source` are timeline times, so
+  they do not follow your cuts. Caption from the transcript (or give `source`) instead.
+- A cut that clips the first or last syllable of a word: keep ~0.1 s around the word times.
 
 ## Self-review before building
 

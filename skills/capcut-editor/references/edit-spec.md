@@ -163,20 +163,46 @@ the style.
 Burned-in style subtitles as individual editable text segments. Exactly one source:
 
 ```json
-"captions": {"srt": "talk.srt", "style": "caption"}
+"captions": {"transcript": "talk.transcript.json", "style": "caption", "uppercase": true}
+
+"captions": {"srt": "talk.srt", "source": "talk.mp4", "style": "caption"}
 
 "captions": {"cues": [{"start": 0.4, "end": 1.9, "text": "Okay so here's the thing"}], "style": "caption"}
 
 "captions": {"words": [{"word": "Okay", "start": 0.40, "end": 0.62}, ...],
-             "max_words": 3, "max_chars": 18, "uppercase": true, "style": "caption"}
+             "max_words": 3, "max_chars": 18, "style": "caption"}
 ```
 
-- `words` groups word timings into short punchy cues (the TikTok look): a new cue starts after
-  `max_words`, `max_chars`, a pause longer than `max_gap` (0.6 s) or sentence punctuation.
-- Timings are **timeline** seconds. If the speech clip does not start at 0 or was trimmed, shift with
-  `"offset"` (seconds, may be negative), or convert the times yourself when you cut out sections.
-- `style` works like text styles. Default if omitted: size 9, bold, white, black stroke, `y = -0.6`.
-- `track` defaults to `"captions"`. `captions` may also be a list of such objects.
+| Key | Default | Meaning |
+|---|---|---|
+| `transcript` | - | A `*.transcript.json` from `transcribe.py`. Its words are used, and its media file becomes `source`. |
+| `words`, `srt`, `cues` | - | Word timings, an SRT file, or ready-made cues. |
+| `source` | from `transcript`, else none | The media file the times refer to. See below. `null` = the times are timeline seconds. |
+| `max_words`, `max_chars` | 3, 18 | Cue size when building from words (`transcript` or `words`). |
+| `max_gap` | 0.6 | A pause longer than this starts a new cue. Shorter pauses keep the cue on screen. |
+| `uppercase` | false | Show the text in capitals. |
+| `punctuation` | true | `false` strips `. , ! ? ; :` from what is shown (decimals and times like `10:30` stay). |
+| `offset` | 0 | Extra shift in seconds, applied last. |
+| `min_duration` | 0.35 | Shortest time a cue stays on screen. |
+| `style`, `track` | caption look, `"captions"` | As for texts. Default look: size 9, bold, white, black stroke, `y = -0.6`. |
+
+**Source times and the timeline.** With a `source`, every time is a position in that file, and the
+builder places each word through the clips that play it with sound (main track, overlays and audio
+items, using their `in`/`out`, position and `speed`). So when you cut a talk into jump cuts, reorder
+sentences or speed a clip up, the captions follow without any arithmetic. A word goes where its
+middle falls; words in parts you cut are left out (the `--check` timeline says how many). A cue never
+spans a cut. SRT/cue lines that span a cut are split, one piece per clip. If no audible clip plays the
+source, the build stops with an error: unmute or add the clip, or set `"source": null`.
+
+Without a `source` (inline `words`, `srt` or `cues` and no `source` key), times are **timeline**
+seconds, shifted by `offset`.
+
+Grouping from words: a new cue starts at `max_words`, `max_chars`, a pause longer than `max_gap`,
+punctuation (`. ? ! , ; :`) or a cut. A short joining word such as "the", "and", "yang" or "di" moves to
+the start of the next cue instead of ending one. Languages written without spaces (Chinese, Japanese,
+Thai, ...) are joined without spaces when the transcript says so.
+
+`captions` may also be a list of such objects, for example two languages on two tracks.
 
 ## effects and filters on their own tracks
 

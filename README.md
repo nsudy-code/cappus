@@ -18,6 +18,7 @@ resources your account can export.
 - [Installation](#installation)
 - [Choose your plan: Free or Pro](#choose-your-plan-free-or-pro)
 - [Usage](#usage)
+  - [Captions](#captions)
 - [Finishing in CapCut](#finishing-in-capcut)
 - [Troubleshooting](#troubleshooting)
 - [Running the scripts directly](#running-the-scripts-directly)
@@ -30,7 +31,7 @@ resources your account can export.
 ## How it works
 
 1. **Analyze.** Claude inspects your media: contact sheets of each clip, shot changes, pauses in
-   speech and the beats of your music.
+   speech, a word-by-word transcript of what is said, and the beats of your music.
 2. **Plan.** It drafts the edit (hook, body, payoff) and writes it as an *edit spec*, a JSON file
    with times in seconds.
 3. **Validate.** `build_draft.py` checks the spec against a catalog of real CapCut resources and
@@ -51,6 +52,7 @@ your draft never shows a missing effect or an "animation loss" label.
 | Claude Code | The CLI, the Code tab of the Claude desktop app, or an IDE extension. It must run **on the same computer as CapCut**, because drafts are written to CapCut's local drafts folder. Claude.ai chat and cloud sessions cannot do this. |
 | Python 3.9 or later | Used by the bundled scripts. |
 | ffmpeg and ffprobe | Must be on your `PATH`. Used to analyze media. |
+| faster-whisper (optional) | Only for captions from speech. Runs offline; the first use downloads a speech model of about 0.5 GB. |
 
 ## Installation
 
@@ -101,6 +103,16 @@ From a clone you can run `python -m pip install -r skills/capcut-editor/requirem
 `pycapcut` writes the draft files, and `numpy` is used for beat detection. If they are missing,
 Claude installs them on first use.
 
+**Optional: captions from speech.**
+
+```bash
+python -m pip install faster-whisper
+```
+
+This adds offline speech-to-text (Whisper). It is only needed for captions and transcript-based
+cutting. If it is missing when you ask for captions, Claude offers to install it. The first
+transcription downloads the default `small` model (about 0.5 GB); after that no network is needed.
+
 ### 3. Check the installation
 
 Start a **new** Claude Code session (skills load when a session starts) and ask:
@@ -146,8 +158,8 @@ Example requests:
 > Edit the clips in D:\Trips\Bali into a 20-second vertical reel synced to song.mp3. Cinematic
 > look, with a title at the start.
 
-> Cut the dead air out of interview.mp4, add captions from interview.srt, and keep it under
-> 60 seconds for YouTube Shorts.
+> Cut the dead air and the repeated takes out of interview.mp4, add word-by-word captions, and keep
+> it under 60 seconds for YouTube Shorts.
 
 > Make a 15-second product ad from the photos and clips in D:\Products\Coffee. Hook in the first
 > two seconds, a short label for each feature, and end on logo.png.
@@ -162,6 +174,15 @@ already open, go back to the home screen or restart CapCut so it rescans its dra
 
 Media is **linked, not copied**. Do not move, rename or delete the source files, or CapCut will
 show them as offline.
+
+### Captions
+
+For footage with speech, Claude transcribes it offline and writes the captions into the draft as
+ordinary CapCut text, styled and editable. Each word keeps its time in the source file, so the
+captions stay in sync after Claude removes pauses, drops repeated takes or reorders sentences. Tell
+Claude how to spell names, brands and unusual terms. If a word is wrong, fix it in CapCut or ask
+Claude to transcribe again with the more accurate `large-v3-turbo` model (about 1.6 GB, slower).
+If you already have an SRT file, give it to Claude instead.
 
 ### Revisions
 
@@ -180,7 +201,7 @@ Some features cannot be written into a draft. Each takes one or two clicks in Ca
 | You want | In CapCut |
 |---|---|
 | Speed ramp (curve speed) | Select the clip > Speed > Curve |
-| Auto captions from speech | Text > Auto captions (Claude can add captions itself if you provide an SRT or transcript) |
+| Auto captions without installing faster-whisper | Text > Auto captions (with faster-whisper, Claude adds the captions itself; see [Captions](#captions)) |
 | Remove the background | Select the clip > Video > Remove BG |
 | Eased keyframes | Click a keyframe and choose an easing preset (drafts use linear keyframes) |
 | Color wheels, HSL, curves, LUTs | Select the clip > Adjust |
@@ -206,6 +227,7 @@ JSON and has `--help`.
 | Script | Purpose |
 |---|---|
 | `probe.py` | Media info, contact sheets, shot changes, speech segments, music beats |
+| `transcribe.py` | Speech to text with a time for every word, plus an optional SRT (needs faster-whisper) |
 | `catalog.py` | Search the CapCut resources: transitions, effects, filters, animations, fonts |
 | `build_draft.py` | Validate a spec (`--check`) and write it as a CapCut draft |
 | `inspect_draft.py` | Read an existing draft, including your manual edits in CapCut |
@@ -250,6 +272,7 @@ skills/capcut-editor/
     capcut-notes.md         Limits, CapCut follow-ups, troubleshooting
   scripts/
     probe.py                Media analysis
+    transcribe.py           Speech to text with word timings (optional)
     catalog.py              Resource search
     build_draft.py          Spec to CapCut draft
     inspect_draft.py        Read existing drafts
@@ -259,6 +282,7 @@ skills/capcut-editor/
     aliases_pro.json        ~390 curated Pro resources with English aliases
     unavailable.json        Resources CapCut has withdrawn; the builder rejects them
   requirements.txt
+  requirements-captions.txt Optional speech-to-text dependency
 docs/cara-pakai.md          User guide in Indonesian
 examples/                   Demo specs and a synthetic media generator
 .claude-plugin/             Plugin and marketplace manifests

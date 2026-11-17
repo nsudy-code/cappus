@@ -59,9 +59,10 @@ There is no automated test suite yet. Before you open a pull request:
 
 ## Project conventions
 
-- **Scripts** use only the standard library, `pycapcut` and `numpy`. They print JSON so that
-  Claude can read the result, and they report all problems at once rather than stopping at the
-  first.
+- **Scripts** use only the standard library, `pycapcut` and `numpy`. The one exception is
+  `transcribe.py`, which needs the optional `faster-whisper` (`requirements-captions.txt`) and must
+  explain how to install it when it is missing. Scripts print JSON so that Claude can read the
+  result, and they report all problems at once rather than stopping at the first.
 - **`SKILL.md`** stays short and focused on the workflow. Put details in `references/`, and point
   to them from `SKILL.md`.
 - **Documentation** is in English. `docs/cara-pakai.md` is the Indonesian user guide. If you change
