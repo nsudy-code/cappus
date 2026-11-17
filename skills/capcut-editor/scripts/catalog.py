@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""Search the catalog of resources that exist inside CapCut (effects, transitions, ...).
+
+  catalog.py kinds
+  catalog.py transition                 # curated free picks (those with an English alias)
+  catalog.py transition glitch flash    # keyword search (alias or CapCut name, any keyword matches)
+  catalog.py scene_effect --all         # every free item, including un-aliased ones
+  catalog.py filter --pro               # include CapCut Pro items
+  catalog.py scene_effect shake --params  # show slider parameters (0-100 each, in this order)
+"""
+from __future__ import annotations
+
+import argparse
+import sys
+
+from _common import KINDS, alias_for, default_duration, is_pro, norm, param_names
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("kind", help="catalog kind, or 'kinds' to list them")
+    ap.add_argument("query", nargs="*", help="keywords; an item matches if any keyword is a substring")
+    ap.add_argument("--all", action="store_true", help="include items without an English alias")
+    ap.add_argument("--pro", action="store_true", help="include CapCut Pro (subscription) items")
+    ap.add_argument("--params", action="store_true", help="show adjustable parameter names")
+    ap.add_argument("--limit", type=int, default=200)
+    args = ap.parse_args()
+
+    if args.kind == "kinds":
+        for kind, (enum, desc) in KINDS.items():
+            free = sum(1 for m in enum if not is_pro(m))
+            print(f"{kind:17} {free:4} free / {len(enum):4} total   {desc}")
+        return 0
+    if args.kind not in KINDS:
+        print(f"unknown kind '{args.kind}'. Kinds: {', '.join(KINDS)}", file=sys.stderr)
+        return 2
+
+    keys = [norm(q) for q in args.query]
+    rows = []
+    for member in KINDS[args.kind][0]:
+        if is_pro(member) and not args.pro:
+            continue
+        alias = alias_for(args.kind, member)
+        hay = norm(member.name) + "|" + norm(alias or "")
+        if keys:
+            if not any(k in hay for k in keys):
+                continue
+        elif not alias and not args.all:
+            continue
+        rows.append((member, alias))
+
+    rows.sort(key=lambda r: (r[1] is None, r[1] or r[0].name))
+    for member, alias in rows[: args.limit]:
+        parts = [f"{alias or '-':22}", f"{member.name:20}", "PRO " if is_pro(member) else "free"]
+        dur = default_duration(member)
+        if dur is not None:
+            parts.append(f"{dur:.2f}s")
+        params = param_names(member)
+        if args.params and params:
+            parts.append("params: " + ", ".join(p.replace("effects_adjust_", "") for p in params))
+        elif params:
+            parts.append(f"{len(params)} params")
+        print("  ".join(parts))
+    shown = min(len(rows), args.limit)
+    note = "" if (keys or args.all) else "  (curated picks only; add --all or keywords for more)"
+    print(f"\n{shown} of {len(rows)} {args.kind} items{note}. Use either column as the name in the spec.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,162 @@
+{
+  "transition": {
+    "dissolve": "叠化", "fade_black": "闪黑", "fade_white": "闪白", "white_flash": "White_Flash",
+    "blur": "转场_模糊", "overlay_mix": "转场_叠加", "push_in": "推近", "pull_out": "拉远",
+    "slide_left": "左移", "slide_right": "右移", "slide_up": "上移", "slide_down": "下移",
+    "wipe_left": "向左擦除", "wipe_right": "向右擦除", "wipe_up": "向上擦除", "wipe_down": "向下擦除",
+    "push_left": "向左", "push_right": "向右", "push_up": "向上", "push_down": "向下",
+    "spin_cw": "顺时针旋转", "spin_ccw": "逆时针旋转", "glitch": "故障", "color_glitch": "彩色故障",
+    "chromatic_glitch": "色差故障", "shake": "抖动", "quake": "震动", "shutter": "快门",
+    "flash": "闪光灯", "strobe": "频闪", "bloom": "泛光", "glare": "炫光", "glare_dissolve": "眩光叠化",
+    "whip_horizontal": "横向模糊", "whip_vertical": "竖向模糊", "stretch": "拉伸",
+    "stretch_left": "向左拉伸", "stretch_right": "向右拉伸", "twist": "扭曲", "swirl": "漩涡",
+    "page_turn": "翻页", "cube": "立方体", "blinds": "百叶窗", "mosaic": "马赛克", "ink": "水墨",
+    "paper_tear": "撕纸", "old_film": "旧胶片", "retro_projector": "复古放映", "memory": "回忆",
+    "particles": "粒子", "smoke": "烟雾转场", "white_smoke": "白色烟雾", "black_smoke": "黑色烟雾",
+    "burn": "燃烧_I", "light_beam": "光束", "blink": "眨眼", "open_curtain": "开幕",
+    "circle_mask": "圆形遮罩", "split_horizontal": "横向分割", "split_vertical": "竖向分割",
+    "split_diagonal": "斜向分割", "infinite_zoom": "无限穿越_I", "gradient_wipe": "渐变擦除",
+    "brush_wipe": "画笔擦除", "snow": "飘雪", "windmill": "风车", "color_dissolve": "色彩溶解",
+    "3d_space": "_3D空间", "cutout_flip": "Cutout_Flip", "fold_over": "Fold_Over",
+    "pip_zoom": "画中画放大", "bounce": "弹跳", "compress": "压缩", "camera": "摄像机",
+    "spin_focus": "旋焦", "negative_flash": "负片爆闪", "bw_flash": "黑白闪光",
+    "glow_camera_move": "辉光运镜", "axis_flip": "中轴旋转", "slide": "滑动", "radial": "放射"
+  },
+  "video_intro": {
+    "fade_in": "渐显", "blur_in": "模糊渐显", "zoom_in": "放大", "zoom_out": "缩小",
+    "dynamic_zoom_in": "动感放大", "dynamic_zoom_out": "动感缩小",
+    "slide_up": "向上滑动", "slide_down": "向下滑动", "slide_left": "向左滑动", "slide_right": "向右滑动",
+    "whip_right": "向右甩入", "whip_down": "向下甩入", "whip_up_right": "向右上甩入",
+    "whip_down_right": "向右下甩入", "whip_up_left": "向左上甩入", "whip_down_left": "向左下甩入",
+    "spin": "旋转", "spin_open": "旋转开幕", "swirl": "漩涡旋转",
+    "shake_vertical": "上下抖动", "shake_horizontal": "左右抖动", "light_shake": "轻微抖动",
+    "pendulum": "钟摆", "wiper": "雨刷", "blinds": "百叶窗", "mirror_flip": "镜像翻转",
+    "rotate_in_left": "向左转入", "rotate_in_right": "向右转入", "rotate_in_up": "向上转入",
+    "flip_back": "反转回正", "liquid_glass": "液态玻璃", "tv_scan": "电视屏扫光",
+    "light_streak": "光效拉丝", "split_shake": "分屏震动", "shake_drop": "抖动下降",
+    "block_slide": "碎块滑动", "bouncing_frame": "跳动边框", "gray_mask": "灰色蒙层"
+  },
+  "video_outro": {
+    "fade_out": "渐隐", "blur_out": "模糊渐隐", "zoom_in": "放大", "zoom_out": "缩小",
+    "slight_zoom": "轻微放大", "slide_up": "向上滑动", "slide_down": "向下滑动",
+    "slide_left": "向左滑动", "slide_right": "向右滑动", "spin": "旋转", "spin_close": "旋转闭幕",
+    "swirl": "漩涡旋转", "mirror_flip": "镜像翻转", "rotate_out_up": "向上转出",
+    "tv_scan": "电视屏扫光", "light_streak": "光效拉丝", "split_shake": "分屏震动",
+    "lightning_split": "闪电分屏", "bouncing_frame": "跳动边框", "gray_mask": "灰色蒙层"
+  },
+  "video_combo": {
+    "zoom": "缩放", "zoom_2": "缩放_II", "flip": "翻转", "spin_rise": "旋转上升", "spin_drop": "旋转降落",
+    "bounce_zoom_in": "放大弹动", "bounce_zoom_out": "缩小弹动", "rebound_stretch": "回弹伸缩",
+    "pull_right": "右拉镜", "pull_left": "左拉镜", "swing": "荡秋千", "pirate_ship": "海盗船",
+    "roller_coaster": "过山车", "slide_wave": "滑入波动", "spin_in_out": "转入转出",
+    "three_split": "三分割", "center_split": "中间分割", "clone": "分身", "blinds": "百叶窗",
+    "shake_zoom_in": "抖入放大", "shrink_spin": "缩小旋转", "yoyo": "悠悠球", "tilt_turn": "斜转",
+    "distort_stretch": "扭曲拉伸", "funhouse": "哈哈镜"
+  },
+  "text_intro": {
+    "fade_in": "渐显", "typewriter": "打字机_I", "typewriter_2": "打字机_II",
+    "random_typewriter": "随机打字机", "glitch_typewriter": "故障打字机", "pop": "弹出",
+    "bounce_up": "向上弹入", "slide_up": "向上滑动", "slide_left": "向左滑动", "slide_right": "向右滑动",
+    "reveal_up": "向上露出", "zoom_in": "放大", "blur_in": "模糊", "glitch": "故障",
+    "glitch_bounce": "故障弹跳", "word_by_word": "逐字", "karaoke": "卡拉OK", "spin_in": "旋入",
+    "wave_in": "波浪弹入", "dissolve_in": "溶解_入场", "glow_in": "辉光入场", "light_sweep": "扫光入场",
+    "light_scan": "光线扫描", "flip_in": "翻转入场", "page_flip": "翻页入场", "curtain_open": "开幕",
+    "flicker": "闪动", "throw": "甩出", "punch_in": "冲屏位移", "elastic": "弹性伸缩_II",
+    "halo": "光晕", "blur_left": "向左模糊", "twist_blur": "扭曲模糊", "magic_fade": "魔幻渐显",
+    "rise": "滑动上升", "somersault": "空翻", "cute_bounce": "可爱悦动"
+  },
+  "text_outro": {
+    "fade_out": "渐隐", "typewriter": "打字机", "random_typewriter": "随机打字机",
+    "slide_down": "向下滑动", "slide_left": "向左滑动", "slide_right": "向右滑动",
+    "zoom_out": "缩小", "blur_out": "模糊", "glitch": "故障", "dissolve_out": "溶解_出场",
+    "dissolve_up": "向上溶解", "fly_out": "飞出", "spin_out": "旋出", "roll_out": "滚出",
+    "curtain_close": "闭幕", "glow_out": "辉光渐隐", "spring": "弹簧", "trail": "拖尾",
+    "ripple": "涟漪", "fall": "滑动下落", "signal_distort": "信号失真", "unfold": "展开",
+    "ink_bleed": "水墨晕开"
+  },
+  "text_loop": {
+    "wave": "波浪", "float": "漂浮", "float_glow": "漂浮发光", "shake": "晃动", "tremble": "颤抖_II",
+    "heartbeat_flash": "心跳频闪", "glitch_flicker": "故障闪动", "chromatic_glitch": "色差故障",
+    "pulse": "闪动脉冲", "random_bounce": "随机弹跳", "word_pop": "逐字放大", "naughty": "调皮",
+    "pixel_jump": "像素跳动", "shout": "呼喊", "arc": "上弧", "shadow_tremble": "投影颤抖",
+    "strobe_fade": "频闪渐显渐隐"
+  },
+  "filter": {
+    "bw": "BW_2", "silent_film": "默片", "vhs": "VHS_I", "1980": "_1980", "soft_grain": "Soft_Grain",
+    "teal_orange": "青橙", "orange_blue": "橙蓝", "cold_blue": "冷蓝", "cool": "冷调",
+    "warm_yellow": "暖黄", "clear": "净透", "natural": "自然", "vivid": "鲜艳_I",
+    "cyberpunk": "赛博朋克", "vaporwave": "蒸汽波", "sunset": "落日", "dusk": "傍晚",
+    "moonlit": "月夜", "dark": "暗调", "gray": "灰调", "sepia": "深褐", "dark_brown": "暗棕",
+    "kraft": "牛皮纸", "gold200": "金200", "jazz": "爵士", "gentle": "温柔", "peach": "蜜桃",
+    "milk_green": "奶绿", "white_tea": "白茶", "food": "美食1", "daily": "日常1", "autumn": "秋天",
+    "sunny_sky": "晴空", "night_vision": "夜视仪", "hard": "硬朗", "metal": "金属",
+    "red_blue": "红与蓝", "dunkirk": "敦刻尔克", "budapest": "布达佩斯", "sicily": "西西里",
+    "san_francisco": "旧金山", "las_vegas": "拉斯维加斯", "berlin": "柏林",
+    "high_saturation": "高饱和战士", "tunnel": "隧道", "cyan_gray": "青灰", "retro": "复古2"
+  },
+  "scene_effect": {
+    "cinematic_bars": "电影感", "vignette": "暗角", "blur": "模糊", "defocus": "失焦",
+    "motion_blur": "动感模糊", "soft_light": "柔光", "glow": "发光", "halo": "光晕",
+    "edge_glow": "边缘发光", "noise": "噪点", "film": "胶片", "film_leak": "胶片漏光",
+    "film_frame": "胶片框", "bw_film": "黑白胶片", "old_movie": "老电影_II", "old_photo": "老照片",
+    "retro_dv": "复古_DV", "dv_texture": "DV纹理", "low_quality": "低画质", "tv_texture": "电视纹理",
+    "tv_on": "电视开机", "tv_off": "电视关机", "interlace": "隔行扫描", "bw_vhs": "黑白VHS",
+    "betamax": "Betamax", "jvc": "JVC", "1998": "_1998", "70s": "_70s",
+    "chromatic": "色差", "chromatic_zoom": "色差放大", "chromatic_radial": "色差放射",
+    "chromatic_glitch": "色差故障_II", "glitch_lines": "横纹故障_II", "bend_glitch": "弯曲故障",
+    "snow_glitch": "雪花故障_I", "lag": "卡机", "shake": "抖动", "quake": "震动",
+    "light_shake": "轻微抖动", "slight_zoom": "轻微放大", "camera_shake": "抖动运镜",
+    "bounce_cam": "弹跳运镜", "sway": "左右摇晃", "zoom_push": "变焦推镜", "lens_zoom": "镜头变焦",
+    "repeat_zoom": "重复变焦", "heartbeat": "心跳", "pulse": "脉搏跳动", "screen_pulse": "屏幕律动",
+    "flash": "闪光灯", "flash_white": "闪白", "flash_black": "闪黑", "strobe": "闪屏",
+    "bloom_strobe": "泛光爆闪", "blue_strobe": "蓝光爆闪", "negative_flicker": "负片闪烁",
+    "random_cuts": "随机闪切", "beat_shots": "Beat_Shots", "flickery_shots": "Flickery_Shots",
+    "shaky_dolly": "Shaky_Dolly", "spinning_focus": "Spinning_Focus", "slit_lighting": "Slit_Lighting",
+    "mirror": "镜像", "mirror_three": "镜像三格", "split_two": "两屏分割", "split_four": "四屏",
+    "split_nine": "九屏", "fisheye": "鱼眼", "wide_angle": "广角", "mosaic": "马赛克",
+    "pixel_art": "像素画", "oil_painting": "油画", "bw_comic": "黑白漫画", "bw_sketch": "黑白线描",
+    "neon_sketch": "荧光线描", "sharpen": "强锐化", "fine_sharpen": "精细锐化", "unblur": "变清晰",
+    "to_color": "变彩色", "rewind": "倒带", "countdown": "倒计时_II", "rec_frame": "录制边框_III",
+    "viewfinder": "取景框_II", "player_ui": "播放界面", "open_bars": "开幕_I", "open_blur": "模糊开幕",
+    "fade_open": "渐显开幕", "fade_close": "渐隐闭幕", "close_bars": "闭幕",
+    "open_vertical": "纵向开幕", "close_horizontal": "横向闭幕", "the_end": "全剧终",
+    "rain": "下雨", "snow": "飘雪", "heavy_snow": "大雪", "fog": "浓雾", "mist": "迷雾",
+    "sunlight": "晴天光线", "strong_sun": "强烈日光", "god_rays": "丁达尔光线", "fire": "火光",
+    "sparks": "星火", "fireworks": "烟花_III", "explosion": "爆炸", "lightning": "闪电",
+    "confetti": "五彩纸屑", "gold_dust": "金粉", "kirakira": "kirakira", "sparkle": "细闪",
+    "stars": "星空", "petals": "花瓣飘落", "sakura": "落樱", "fireflies": "萤火",
+    "hearts": "爱心光斑", "rainbow": "小彩虹", "disco_light": "蹦迪光", "ktv_light": "KTV灯光",
+    "neon_rays": "霓虹光线", "dream": "梦境", "night": "暗夜", "dim": "曝光降低",
+    "freeze_frame": "相片定格", "polaroid": "宝丽莱_III", "thermal": "节奏热成像",
+    "3d_camera": "_3D运镜", "3d_photo": "_3D动态照片", "naked_eye_3d": "裸眼3D",
+    "infinite_tunnel": "无限穿越", "dash": "冲刺", "ripple": "水波纹", "water_reflection": "水波倒影",
+    "invisible": "隐形人", "like": "点赞", "alert": "预警", "question_marks": "满屏问号",
+    "snapshot": "咔嚓", "cyber_future": "赛博未来", "prism": "方形棱镜"
+  },
+  "character_effect": {
+    "clone": "分身", "phantom": "幻影", "angel_wings": "天使翅膀", "devil_wings": "恶魔之翼",
+    "halo": "光环_I", "flame_trail": "火焰拖尾", "neon_outline": "流光描边",
+    "electric_outline": "电光描边_II", "sound_wave": "声波", "big_head": "大头",
+    "laser_eyes": "镭射眼_I", "heart_eyes": "爱心眼", "blush": "脸红", "face_mosaic": "脸部马赛克",
+    "bg_spin": "背景旋转", "bg_trail": "背景拖影", "soul_leave": "灵魂出走", "color_ghost": "彩色重影",
+    "pop_out": "Pop_Out", "crash": "CRASH", "butterfly_wings": "蝴蝶翅膀", "local_blur": "局部模糊",
+    "glitch_outline": "故障描边_I"
+  },
+  "audio_effect": {
+    "echo": "回音", "lofi": "低保真", "megaphone": "扩音器", "vinyl": "黑胶", "synth": "合成器",
+    "electronic": "电音", "tremolo": "颤音", "low_battery": "没电了", "karaoke": "麦霸",
+    "big_house": "Big_House", "monster": "怪物", "chipmunk": "花栗鼠", "male": "男生",
+    "female": "女生", "uncle": "大叔", "loli": "萝莉"
+  },
+  "voice_effect": {
+    "squirrel": "Squirrel", "monster": "怪物", "robot": "机器人", "chipmunk": "花栗鼠", "loli": "萝莉"
+  },
+  "mask": {
+    "linear": "线性", "mirror": "镜面", "circle": "圆形", "rectangle": "矩形", "heart": "爱心", "star": "星形"
+  },
+  "blend": {
+    "multiply": "正片叠底", "color_dodge": "颜色减淡", "color_burn": "颜色加深",
+    "linear_burn": "线性加深", "soft_light": "柔光", "hard_light": "强光", "screen": "滤色",
+    "overlay": "叠加", "lighten": "变亮", "darken": "变暗"
+  }
+}

@@ -1,0 +1,218 @@
+# Edit spec reference
+
+One JSON object. All times are **seconds**. Unknown keys are rejected (typos get caught), except
+`"note"`, which is allowed on every item for your own comments.
+
+## Contents
+
+- [Top level](#top-level)
+- [Time values and references](#time-values-and-references)
+- [Coordinates and scale](#coordinates-and-scale)
+- [video - main track clips](#video---main-track-clips)
+- [overlays - picture-in-picture, B-roll, layers](#overlays)
+- [audio](#audio)
+- [texts and styles](#texts-and-styles)
+- [captions](#captions)
+- [effects and filters on their own tracks](#effects-and-filters-on-their-own-tracks)
+- [stickers](#stickers)
+- [Resource names and parameters](#resource-names-and-parameters)
+
+## Top level
+
+| key | default | meaning |
+|---|---|---|
+| `name` | spec file name | Draft name shown in CapCut. Also the folder name. |
+| `width`, `height` | 1080, 1920 | Canvas. 9:16 = 1080x1920, 16:9 = 1920x1080, 1:1 = 1080x1080, 4:5 = 1080x1350. |
+| `fps` | 30 | Match the footage when it is consistently 24/25/60. |
+| `allow_pro` | false | Permit CapCut Pro resources. Only when the user has a subscription. |
+| `styles` | {} | Named text styles, reused via `"style": "<name>"`. |
+| `video` | required | Main-track clips, in playback order. |
+| `overlays`, `audio`, `texts`, `captions`, `effects`, `filters`, `stickers` | [] | See below. |
+
+## Time values and references
+
+Anywhere a timeline time is expected (`at`, `end`, duck ranges):
+
+| form | meaning |
+|---|---|
+| `4.5` | seconds from timeline start |
+| `"1:04.5"` | minutes:seconds |
+| `"@hook"` / `"@hook.start"` | start of the clip whose `id` is `hook` |
+| `"@hook.end"` | its end |
+| `"@hook+0.4"`, `"@hook.end-0.25"` | offset in seconds |
+| `"end"`, `"end-1.5"` | end of the main track |
+
+`duration` is a length in seconds, or `"@hook"` meaning "as long as that clip".
+Give either `duration` or `end`, not both. Ids exist for main clips and overlays (and any other item
+you give an `id`); an item can only reference ids defined earlier in this order: video, overlays,
+audio, texts, captions, effects, filters.
+
+## Coordinates and scale
+
+- Position `x`, `y` is the item's centre in **half-canvas units**: `0,0` is the centre, `x = 1` the right
+  edge, `x = -1` the left edge, `y = 1` the **top** edge, `y = -1` the bottom edge.
+- `scale` 1.0 = the clip as fitted to the canvas (after `fit`). Text `scale` multiplies its `size`.
+- `rotation` is degrees clockwise. `opacity` is 0-1.
+
+Vertical-video safe zone (platform UI covers the rest): keep text within `y` from about `-0.55` to
+`0.7`, and `x` within `-0.8` to `0.8`. Captions sit well around `y = -0.45` to `-0.6`; titles around
+`y = 0.45` to `0.6`.
+
+## video - main track clips
+
+```json
+{"id": "hook", "src": "surf.mp4", "in": 3.2, "out": 5.0, "speed": 1.0, "fit": "cover",
+ "volume": 1.0, "motion": "push_in", "transition": {"name": "dissolve", "duration": 0.4}}
+```
+
+| key | meaning |
+|---|---|
+| `src` | Video, image or GIF. Relative paths resolve from the spec file's folder. |
+| `in`, `out` | Source range in the file. Defaults: 0 and end of file. |
+| `duration` | Videos: timeline length instead of `out`. **Images: how long the still is shown (default 3).** |
+| `speed` | 0.1-10ish. 0.5 = slow motion (needs 60 fps footage to look smooth), 2 = fast. Constant only. |
+| `volume`, `mute` | Clip audio gain (1 = original), or `"mute": true`. |
+| `fade` | `{"in": 0.3, "out": 0.3}` - fades the clip's **audio**. For a visual fade use `intro`/`outro` `fade_in`/`fade_out`. |
+| `fit` | `"contain"` (default, whole frame visible, bars if aspect differs) or `"cover"` (fill canvas, crop overflow). |
+| `background` | For `contain`: `"blur"`, `{"blur": 1-4}` or `"#RRGGBB"`. Main track only. |
+| `transform` | `{"scale", "scale_x", "scale_y", "x", "y", "rotation", "opacity", "flip_h", "flip_v"}` |
+| `motion` | Camera-move preset: `push_in`, `pull_out`, `pan_left`, `pan_right`, `pan_up`, `pan_down`, or `{"type": "push_in", "amount": 0.15}` (default amount 0.12). Runs over the whole clip. |
+| `keyframes` | `{"scale": [[0, 1.0], [2.0, 1.2]], "x": [[0, 0], [-0.01, 0.1]]}`. Time is seconds from the clip's start; **negative = from its end**. Properties: `x`, `y`, `scale`, `scale_x`, `scale_y`, `rotation`, `opacity`, `saturation`, `contrast`, `brightness` (last three: -1..1, 0 = unchanged), `volume`. Linear interpolation. Not with `motion` on the same property. |
+| `intro`, `outro` | Clip In/Out animation: `"fade_in"` or `{"name": "zoom_in", "duration": 0.4}` (kinds `video_intro`, `video_outro`). |
+| `combo` | Whole-clip Combo animation (kind `video_combo`). Cannot be combined with intro/outro. |
+| `transition` | Joins this clip to the **next** one (kind `transition`). Not allowed on the last clip. Duration is capped at half the shorter neighbour. |
+| `filter` | `"teal_orange"` or `{"name": ..., "intensity": 0-100}` - applies to this clip only. |
+| `effects` | List of `"name"` or `{"name", "params"}` - scene or body effects on this clip only. |
+| `mask` | `{"type": "circle", "x": 0, "y": 0, "size": 0.5, "feather": 10, "rotation": 0, "invert": false}`. Types: `linear`, `mirror`, `circle`, `rectangle`, `heart`, `star`. `x`,`y` in -1..1 of the clip; `size` = fraction of clip height. Rectangle also takes `width` (fraction of clip width) and `round` (0-100). |
+| `blend` | Blend mode: `screen`, `overlay`, `multiply`, `soft_light`, `hard_light`, `lighten`, `darken`, `color_dodge`, `color_burn`, `linear_burn`. Meaningful on overlays. |
+| `chroma` | Green screen: `{"color": "#00FF00", "intensity": 20, "shadow": 0}`. |
+
+## overlays
+
+Same keys as a main clip (no `transition`, no `background`), plus placement:
+
+```json
+{"id": "pip", "src": "reaction.mp4", "at": "@hook+0.5", "end": "@hook.end", "mute": true,
+ "transform": {"scale": 0.35, "x": 0.58, "y": 0.6},
+ "mask": {"type": "rectangle", "size": 0.95, "width": 0.95, "round": 12}, "intro": "slide_left"}
+```
+
+`at` is the timeline start. Length comes from `in`/`out`, or `duration`, or `end`. Optional `track`
+names the layer (default `"overlay"`); tracks created later sit **above** earlier ones. Typical uses:
+B-roll covering a talking head (full-size, `"fit": "cover"`, `"mute": true`), picture-in-picture,
+light-leak/dust footage with `"blend": "screen"`, logo PNG in a corner.
+
+## audio
+
+```json
+{"src": "song.mp3", "at": 0, "in": 31.5, "end": "end", "volume": 0.6,
+ "fade": {"in": 0.2, "out": 1.2},
+ "duck": {"ranges": [["@talk", "@talk.end"]], "to": 0.2, "ramp": 0.25}}
+```
+
+| key | meaning |
+|---|---|
+| `src`, `at` | File and timeline start. |
+| `in`, `out` | Source range. `in` picks where in the song to start. |
+| `duration` / `end` | Timeline length instead of `out`. `"end": "end"` trims to the main track. If the file is too short you get a warning, not a loop - add a second item. |
+| `volume` | 1 = original. Music under speech ~0.15-0.3; music alone ~0.5-0.8; voice-over 1.0. |
+| `fade` | `{"in", "out"}` seconds. |
+| `duck` | Lowers volume to `to` x volume during each timeline range (with `ramp` s slopes) via volume keyframes. |
+| `keyframes` | `{"volume": [[t, v], ...]}` - manual automation, t from the item's start. |
+| `effects` | Voice/scene effects (kinds `audio_effect`, `voice_effect`), e.g. `"echo"`, `"lofi"`, `"megaphone"`. |
+| `speed`, `track` | Playback rate; track name (default `"audio"`, use e.g. `"music"`, `"vo"`, `"sfx"`). |
+
+## texts and styles
+
+```json
+"styles": {
+  "title": {"font": "Poppins_Bold", "size": 14, "bold": true, "color": "#FFFFFF", "y": 0.5,
+            "stroke": {"color": "#000000", "width": 45},
+            "intro": {"name": "pop", "duration": 0.3}, "outro": "fade_out"}
+},
+"texts": [
+  {"text": "3 THINGS I WISH\nI KNEW", "at": 0.2, "end": "@hook.end", "style": "title"},
+  {"text": "#2", "at": "@two", "duration": 1.2, "style": "title", "size": 22, "color": "#FFE600"}
+]
+```
+
+A text item takes `text` (use `\n` for line breaks), `at`, `duration`/`end`, optional `track`, optional
+`style` (a name from `styles`, or an inline object), and any style key directly - direct keys override
+the style.
+
+| style key | default | meaning |
+|---|---|---|
+| `font` | system | Kind `font` (`catalog.py font <keyword>`). Check the font covers your language. |
+| `size` | 8 | CapCut font size. On 1080x1920: captions 7-10, titles 12-18, single big words 20-30. A first guess - tell the user to eyeball it. |
+| `color` | `#FFFFFF` | `#RRGGBB`. |
+| `bold`, `italic`, `underline` | false | |
+| `align` | `center` | `left`, `center`, `right`. |
+| `wrap` | 0.82 | Max line width as a fraction of canvas width; `false` disables wrapping. |
+| `letter_spacing`, `line_spacing` | 0 | CapCut units. |
+| `x`, `y`, `scale`, `rotation`, `opacity` | 0, 0, 1, 0, 1 | Placement (see coordinates). |
+| `stroke` | none | `{"color": "#000000", "width": 0-100, "opacity": 1}` - width 30-50 is a solid outline. |
+| `shadow` | none | `{"color", "opacity", "blur", "distance", "angle"}`. |
+| `background` | none | Box behind text: `{"color": "#000000", "opacity": 0.6, "radius": 0.3}`. |
+| `intro`, `outro` | none | Kinds `text_intro`, `text_outro`; name or `{"name", "duration"}`. |
+| `loop` | none | Kind `text_loop`; runs between intro and outro. |
+| `keyframes` | none | On the text item (not in a style): `x`, `y`, `scale`, `rotation`. |
+| `effect_id`, `bubble` | none | Fancy-text / bubble presets by raw CapCut id - see `capcut-notes.md`. |
+
+## captions
+
+Burned-in style subtitles as individual editable text segments. Exactly one source:
+
+```json
+"captions": {"srt": "talk.srt", "style": "caption"}
+
+"captions": {"cues": [{"start": 0.4, "end": 1.9, "text": "Okay so here's the thing"}], "style": "caption"}
+
+"captions": {"words": [{"word": "Okay", "start": 0.40, "end": 0.62}, ...],
+             "max_words": 3, "max_chars": 18, "uppercase": true, "style": "caption"}
+```
+
+- `words` groups word timings into short punchy cues (the TikTok look): a new cue starts after
+  `max_words`, `max_chars`, a pause longer than `max_gap` (0.6 s) or sentence punctuation.
+- Timings are **timeline** seconds. If the speech clip does not start at 0 or was trimmed, shift with
+  `"offset"` (seconds, may be negative), or convert the times yourself when you cut out sections.
+- `style` works like text styles. Default if omitted: size 9, bold, white, black stroke, `y = -0.6`.
+- `track` defaults to `"captions"`. `captions` may also be a list of such objects.
+
+## effects and filters on their own tracks
+
+These sit above the video and affect everything under them for their time range - use them for a look
+across several clips or a hit at a specific moment.
+
+```json
+"effects": [{"name": "cinematic_bars", "at": 0, "end": "end"},
+            {"name": "shake", "at": "@drop", "duration": 0.5, "params": {"speed": 60}}],
+"filters": [{"name": "teal_orange", "at": 0, "end": "end", "intensity": 55}]
+```
+
+`effects` resolve against `scene_effect`, then `character_effect`. Overlapping items get extra lanes.
+
+## stickers
+
+`{"resource_id": "7226264888031694091", "at": 2, "duration": 2, "transform": {"scale": 0.4, "y": 0.5}}`.
+There is no sticker catalog; ids must come from an existing draft (see `capcut-notes.md`). Usually it is
+better to tell the user to drop stickers in by hand.
+
+## Resource names and parameters
+
+Any name field accepts the English alias or the original CapCut name, case/space/underscore-insensitive.
+Pro resources are rejected unless `allow_pro` is true, and the error lists free alternatives.
+
+`params` drive the effect's sliders, each **0-100** like in CapCut's UI. Give a list in catalog order
+(`null` keeps a default) or an object keyed by parameter name:
+
+```bash
+python scripts/catalog.py scene_effect chromatic --params
+# chromatic   色差   free   params: horizontal_chromatic, vertical_chromatic
+```
+```json
+{"name": "chromatic", "params": {"vertical_chromatic": 40}}
+{"name": "chromatic", "params": [null, 40]}
+```
+
+Without `params`, CapCut's defaults are used - usually a good starting point. Lower values (20-40)
+are the usual fix for an effect that is too strong.

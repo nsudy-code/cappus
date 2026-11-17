@@ -1,0 +1,79 @@
+{
+  "name": "cappus-demo",
+  "width": 1080,
+  "height": 1920,
+  "fps": 30,
+  "styles": {
+    "title": {
+      "size": 14, "bold": true, "color": "#FFFFFF", "y": 0.55,
+      "stroke": {"color": "#000000", "width": 45},
+      "shadow": {"color": "#000000", "opacity": 0.7, "distance": 6},
+      "intro": {"name": "pop", "duration": 0.35}, "outro": {"name": "fade_out", "duration": 0.25}
+    },
+    "caption": {
+      "size": 9, "bold": true, "color": "#FFE600", "y": -0.55,
+      "stroke": {"color": "#000000", "width": 40},
+      "intro": {"name": "bounce_up", "duration": 0.15}
+    }
+  },
+  "video": [
+    {
+      "id": "hook", "src": "media/landscape.mp4", "in": 0.5, "out": 3.0,
+      "fit": "cover", "motion": "push_in", "intro": "dynamic_zoom_in",
+      "transition": {"name": "white_flash", "duration": 0.3}
+    },
+    {
+      "id": "b", "src": "media/vertical.mp4", "in": 1.0, "out": 3.0, "speed": 0.5,
+      "filter": {"name": "teal_orange", "intensity": 70},
+      "effects": [{"name": "chromatic", "params": [40]}],
+      "transition": "glitch"
+    },
+    {
+      "id": "wide", "src": "media/landscape.mp4", "in": 4.0, "out": 6.0,
+      "fit": "contain", "background": "blur", "motion": {"type": "pan_left", "amount": 0.08},
+      "transition": "dissolve"
+    },
+    {
+      "id": "still", "src": "media/photo.png", "duration": 2.5, "fit": "cover",
+      "keyframes": {"scale": [[0, 1.0], [-0.01, 1.2]], "rotation": [[0, -2], [-0.01, 2]]},
+      "outro": {"name": "fade_out", "duration": 0.5}
+    }
+  ],
+  "overlays": [
+    {
+      "id": "pip", "src": "media/vertical.mp4", "at": "@wide+0.3", "end": "@wide.end", "in": 0, "mute": true,
+      "transform": {"scale": 0.32, "x": 0.6, "y": 0.62},
+      "mask": {"type": "rectangle", "size": 0.9, "width": 0.9, "round": 12},
+      "intro": "slide_left", "outro": "fade_out"
+    }
+  ],
+  "audio": [
+    {
+      "src": "media/music.mp3", "at": 0, "end": "end", "volume": 0.5,
+      "fade": {"in": 0.3, "out": 1.0},
+      "duck": {"ranges": [["@b", "@b.end"]], "to": 0.3}
+    }
+  ],
+  "texts": [
+    {"text": "CAPPUS DEMO", "at": 0.2, "end": "@hook.end-0.2", "style": "title"},
+    {"text": "editable di CapCut", "at": "@wide+0.2", "duration": 1.6, "style": "title",
+     "size": 10, "color": "#00E5FF", "loop": "wave", "font": "Poppins_Bold"}
+  ],
+  "captions": {
+    "style": "caption",
+    "words": [
+      {"word": "setiap", "start": 2.6, "end": 2.9}, {"word": "klip", "start": 2.9, "end": 3.2},
+      {"word": "bisa", "start": 3.2, "end": 3.5}, {"word": "diedit", "start": 3.5, "end": 4.0},
+      {"word": "ulang.", "start": 4.0, "end": 4.5}, {"word": "Keren", "start": 4.9, "end": 5.3},
+      {"word": "kan?", "start": 5.3, "end": 5.8}
+    ],
+    "max_words": 2, "uppercase": true
+  },
+  "effects": [
+    {"name": "cinematic_bars", "at": "@wide", "duration": "@wide"},
+    {"name": "shake", "at": "@b", "duration": 0.4}
+  ],
+  "filters": [
+    {"name": "soft_grain", "at": "@still", "end": "end", "intensity": 60}
+  ]
+}

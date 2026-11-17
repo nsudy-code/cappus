@@ -1,0 +1,172 @@
+---
+name: capcut-editor
+description: Edit videos by producing a real CapCut draft project that the user opens and keeps editing in CapCut desktop - every cut, text, transition, effect, filter, animation and keyframe stays editable on the timeline. Use this whenever the user wants a video edited, cut, assembled, captioned, synced to music, reformatted for TikTok/Reels/Shorts, or made to "look cool" from their footage/photos/audio, and especially when they mention CapCut, a CapCut project/draft/template, or wanting to tweak the result themselves afterwards. Also use it to revise a draft this skill made earlier. Prefer this over rendering a flat MP4 with ffmpeg unless the user explicitly asks for a rendered file only.
+---
+
+# CapCut Editor
+
+You edit video the way a human editor does in CapCut, except you write the project file instead of
+dragging clips. The output is a **draft** in CapCut's own project format: the user opens it in CapCut
+desktop, sees a normal timeline, and can change anything. Nothing is baked in.
+
+Two things make this work, and both are easy to get wrong without the bundled tools:
+
+1. **Only real CapCut resources.** Every transition, effect, filter, animation and font is referenced
+   by an internal CapCut ID. A made-up name ("Cinematic Glow") silently does nothing. The bundled
+   catalog holds ~6,000 real resources; `build_draft.py` refuses anything that is not in it.
+2. **You cannot watch the result.** You never see the render, so taste has to come from looking at the
+   footage first, planning deliberately, and following the craft guidance rather than piling on effects.
+
+## Setup (once per machine)
+
+```bash
+python -m pip install -r <skill>/requirements.txt    # pycapcut + numpy
+```
+
+`ffmpeg`/`ffprobe` must be on PATH. If `pip` targets a managed Python, create a venv and run the
+scripts with that interpreter. All scripts live in `<skill>/scripts/` and print JSON.
+
+## Workflow
+
+### 1. Get the brief - but do not interrogate
+
+You need: the media files, where the video is going (decides aspect ratio), rough length, and the vibe.
+Infer what you can and state your assumptions instead of asking a list of questions. Defaults:
+vertical 1080x1920 at 30 fps, free CapCut resources only, 15-40 s for short-form.
+Only use Pro resources (`"allow_pro": true`) if the user says they have CapCut Pro - otherwise the
+project opens fine but export is blocked behind a paywall, which is a nasty surprise.
+
+### 2. Look at the footage before deciding anything
+
+```bash
+python scripts/probe.py clip1.mp4 clip2.mp4 song.mp3              # sizes, durations, fps
+python scripts/probe.py clip1.mp4 --sheet <scratch_dir> --frames 12   # then Read the JPG it reports
+python scripts/probe.py clip1.mp4 --sheet <scratch_dir> --from 12 --to 18   # zoom into a moment
+python scripts/probe.py clip1.mp4 --scenes        # shot changes inside a long file
+python scripts/probe.py talk.mp4 --silence        # speech segments, for cutting dead air
+python scripts/probe.py song.mp3 --beats          # bpm, beat times, downbeats, energy curve
+```
+
+Actually open the contact sheets with the Read tool. Choosing in/out points from filenames and
+durations alone produces edits that cut mid-gesture or hold on nothing. Zoom the sheet into a window
+whenever you need to place a cut precisely - sheet times are approximate (within one frame-step).
+
+If there is speech and the user wants captions, you need word or sentence timings. Use a transcript/SRT
+the user provides, or run a speech-to-text tool if one is available in the environment. If neither
+exists, say so and suggest CapCut's own **Auto captions** button on the finished draft - do not invent
+timings.
+
+### 3. Plan the edit, briefly, then write the spec
+
+Read `references/editing-craft.md` before planning - it has the pacing rules, the per-genre recipes and
+the "which effect for which mood" palette. Sketch a beat sheet (hook, body, payoff, with timestamps),
+then express it as an edit spec: one JSON file, times in seconds. Save it next to the user's media (or
+in the project folder), because relative `src` paths resolve from the spec's location and the spec is
+what you edit when the user asks for changes.
+
+Minimal shape (full reference: `references/edit-spec.md`):
+
+```json
+{
+  "name": "Bali trip reel",
+  "width": 1080, "height": 1920, "fps": 30,
+  "styles": {"title": {"size": 14, "bold": true, "stroke": {"color": "#000000", "width": 45},
+                       "intro": "pop", "outro": "fade_out"}},
+  "video": [
+    {"id": "hook", "src": "surf.mp4", "in": 3.2, "out": 5.0, "fit": "cover", "motion": "push_in",
+     "transition": {"name": "white_flash", "duration": 0.3}},
+    {"id": "walk", "src": "beach.mp4", "in": 10.0, "out": 12.4, "fit": "cover", "speed": 0.5,
+     "filter": {"name": "teal_orange", "intensity": 60}}
+  ],
+  "audio": [{"src": "song.mp3", "in": 31.5, "at": 0, "end": "end", "volume": 0.6,
+             "fade": {"in": 0.2, "out": 1.0}}],
+  "texts": [{"text": "BALI IN 20 SECONDS", "at": 0.2, "end": "@hook.end", "style": "title", "y": 0.5}],
+  "effects": [{"name": "shake", "at": "@walk", "duration": 0.4}]
+}
+```
+
+How the pieces behave:
+
+- `video` is the main track. Clips play back to back in list order; you never give them a start time.
+  `in`/`out` are positions in the source file. Timeline length = `(out - in) / speed`.
+- Everything else (`overlays`, `audio`, `texts`, `captions`, `effects`, `filters`) is placed with `at`
+  plus `duration` or `end`. Times can be seconds, or references to clip ids: `"@hook"`,
+  `"@hook.end-0.3"`, `"@walk+1"`, and `"end"` for the end of the main track. Prefer references - they
+  keep text and effects glued to their clip when you retime the cut later.
+- Overlapping items on the same track are moved to an extra lane automatically.
+- Names come from the catalog. Use the English alias or the original CapCut name - both work.
+
+### 4. Pick resources from the catalog, never from memory
+
+```bash
+python scripts/catalog.py kinds                       # the 15 kinds and how many are free
+python scripts/catalog.py transition                  # curated free picks with English aliases
+python scripts/catalog.py scene_effect glitch flash   # keyword search
+python scripts/catalog.py scene_effect shake --params # slider names; params are 0-100 in that order
+python scripts/catalog.py filter --all                # every free filter, incl. un-aliased ones
+```
+
+Most original names are Chinese because that is what CapCut ships internally; CapCut shows the
+localized name in its UI. You can read them - `--all` lists hundreds more options than the aliased
+picks, and a Chinese name is a perfectly valid value in the spec.
+
+### 5. Validate, then build
+
+```bash
+python scripts/build_draft.py edit.json --check   # all problems at once, with "did you mean" hints
+python scripts/build_draft.py edit.json           # writes the draft into CapCut's draft folder
+```
+
+`--check` prints the resolved timeline. Read it: confirm the total duration, that text sits where you
+meant, and that nothing runs past the main track. Fix every reported problem and re-check; do not
+remove a feature just to make an error go away without understanding it.
+
+To revise after feedback, edit the spec and rebuild with `--overwrite`. This only ever replaces drafts
+this tool created. **Overwriting discards changes the user made inside CapCut**, so first run
+`python scripts/inspect_draft.py "<draft name>"`: it prints the current timeline and
+`edited_in_capcut_since_build`. If the user edited it, ask before overwriting, or build under a new
+`name`. The draft must not be open in CapCut while you write it. The same script reads any draft the
+user made by hand, which is how you pick up sticker / fancy-text ids or learn their editing style.
+
+### 6. Hand over honestly
+
+Tell the user:
+
+- the draft name, and that it is in CapCut's project list (if CapCut is already open: go back to the
+  home screen or restart it so it rescans);
+- a short description of the edit and the reasoning (structure, where the cuts land, what the look is);
+- that you have not watched the render, plus the two or three things most worth eyeballing (text
+  size/position, a specific transition, music level against speech);
+- anything you could not do in the draft and how to do it in CapCut in one click
+  (see `references/capcut-notes.md`).
+
+Source media is linked, not copied - warn them not to move or delete the files.
+
+## What makes the edit good (the short version)
+
+The full guidance is in `references/editing-craft.md`. The rules that matter most:
+
+- **Cut for a reason.** Each clip earns its place and leaves early. First clip is the strongest visual,
+  not the chronologically first one. On short-form the first 1-2 s decide everything.
+- **Music drives pacing.** With music, land cuts on beats and the biggest moment on a downbeat or energy
+  jump from `--beats`. Start the song at its good part (`in`), not at 0.
+- **Restraint reads as professional.** One font, two colors, one or two transition families, a single
+  look (filter) across the piece. Hard cuts for most joins; a transition is punctuation for a change of
+  scene, time or energy. Stacking effects on every clip is the most common way to make an edit look cheap.
+- **Motion on stills and static shots.** A slow `push_in` or pan gives life; alternate directions.
+- **Reframe properly.** Horizontal footage in a vertical canvas: `"fit": "cover"` (crops the sides -
+  check the subject stays in frame, shift with `transform.x`) or `"fit": "contain"` with
+  `"background": "blur"`. Never leave accidental black bars.
+- **Text must be readable in half a second.** Short lines, heavy weight, stroke or shadow for contrast,
+  on screen long enough to read twice, inside the platform safe zone.
+- **Sound is half the edit.** Fade music in and out, duck it under speech, mute clip audio that is just
+  wind and handling noise.
+
+## Reference files
+
+- `references/edit-spec.md` - every field of the spec, units, coordinate system, examples. Read it when
+  writing anything beyond the minimal shape above.
+- `references/editing-craft.md` - pacing, genre recipes (talking head, beat-synced montage, cinematic
+  vlog, product promo, photo slideshow), and the effect/transition/filter palette by mood.
+- `references/capcut-notes.md` - what is and is not possible in a generated draft, CapCut-side
+  follow-ups, and troubleshooting when a draft does not show up or a resource is missing.

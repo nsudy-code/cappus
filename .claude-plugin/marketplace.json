@@ -1,0 +1,11 @@
+{
+  "name": "cappus",
+  "owner": {"name": "cappus"},
+  "plugins": [
+    {
+      "name": "cappus",
+      "source": "./",
+      "description": "Edit videos into editable CapCut desktop drafts."
+    }
+  ]
+}
