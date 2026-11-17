@@ -34,7 +34,8 @@ examples/
 
 ## Kebutuhan
 
-- CapCut desktop (versi internasional) di Windows atau macOS. Sudah dicoba menulis draft untuk CapCut 8.0.1.
+- CapCut desktop (versi internasional) di Windows atau macOS. Sudah diverifikasi: draft hasil
+  `examples/demo.json` terbuka dan bisa diputar di CapCut 8.0.1 (Windows).
 - Python 3.9+ dan `ffmpeg`/`ffprobe` di PATH.
 - `python -m pip install -r skills/capcut-editor/requirements.txt` (berisi `pycapcut` dan `numpy`).
 
