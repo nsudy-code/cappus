@@ -14,12 +14,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from pathlib import Path
 
-from _common import MARKER, edit_check, find_drafts_dir, newest_timeline
+from _common import MARKER, draft_folder, edit_check, find_drafts_dir, newest_timeline
 
-# The timeline file CapCut saved last: 8.x re-saves draft_content.json and leaves draft_info.json as
-# the tool wrote it, 9.x writes Timelines/<id>/draft_content.json, other builds do the reverse.
+# The live timeline: CapCut 9's Timelines/<main id>/draft_content.json, else the file saved last (8.x
+# re-saves draft_content.json and leaves draft_info.json as the tool wrote it, other builds the reverse).
 load = newest_timeline
 
 
@@ -91,10 +90,8 @@ def main() -> int:
         print("\n".join(rows) or "(no drafts)")
         return 0
 
-    folder = Path(args.draft)
-    if not folder.is_dir() and drafts is not None:
-        folder = drafts / args.draft
-    if not folder.is_dir():
+    folder = draft_folder(args.draft, drafts)
+    if folder is None:
         print(f"draft '{args.draft}' not found", file=sys.stderr)
         return 2
     path, data = load(folder)

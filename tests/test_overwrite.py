@@ -11,8 +11,9 @@ from pathlib import Path
 import pytest
 
 import build_draft
+import _common
 from conftest import run
-from _common import BUILD_FILE, edit_check
+from _common import BUILD_FILE, edit_check, newest_timeline
 
 UUID = re.compile(r"[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}")
 
@@ -375,3 +376,105 @@ def test_unreadable_project_json_is_left_behind(built, project):
     else:
         assert not (folder / "Timelines").exists(), files
     assert not (drafts / "escape").exists() and not (drafts.parent / "escape").exists()
+
+
+# A keyframe value on a 4-decimal rounding boundary, as eased keyframes often produce:
+# -0.23 + 0.03 * 0.875 is -0.20375000000000001, which rounds to -0.2038, while CapCut's -0.20375 rounds to -0.2037.
+BOUNDARY = -0.23 + 0.03 * 0.875
+
+
+@pytest.fixture
+def keyframed(tmp_path, media):
+    spec = {"name": "t-kf", "video": [{"src": str(media / "vertical.mp4"), "duration": 3,
+                                       "keyframes": {"y": [[0, -0.23], [0.3, BOUNDARY]]}}]}
+    spec_path = tmp_path / "kf.json"
+    spec_path.write_text(json.dumps(spec), encoding="utf-8")
+    drafts = tmp_path / "drafts"
+    drafts.mkdir()
+    res = run("build_draft.py", spec_path, "--drafts-dir", drafts)
+    assert res.returncode == 0, res.stderr
+    return drafts / "t-kf"
+
+
+def six_decimals(data):
+    """CapCut 9.7.1 saves keyframe values with 6 decimals."""
+    for t in data["tracks"]:
+        for s in t["segments"]:
+            for k in s.get("common_keyframes") or []:
+                for kf in k["keyframe_list"]:
+                    kf["values"] = [round(v, 6) for v in kf["values"]]
+
+
+def test_capcut_saving_six_decimals_is_not_an_edit(keyframed):
+    """Seen with CapCut 9.7.1: a draft that was only opened and closed read as "keyframes changed"."""
+    resave(keyframed, six_decimals)
+    state = edit_check(keyframed)
+    assert state["edited"] is False, state
+
+
+def old_round(value, nd=4):
+    """How cappus 0.5.2 and older rounded the signature."""
+    try:
+        return round(float(value), nd)
+    except (TypeError, ValueError):
+        return None
+
+
+def test_fingerprint_stored_by_an_older_cappus_still_matches(keyframed):
+    data = json.loads((keyframed / "draft_info.json").read_text(encoding="utf-8"))
+    real = _common._r
+    _common._r = old_round
+    try:
+        old = _common.timeline_signature(data)
+    finally:
+        _common._r = real
+    (keyframed / BUILD_FILE).write_text(json.dumps({"signature_sha256": _common.signature_hash(old),
+                                                    "signature": old}), encoding="utf-8")
+    resave(keyframed, six_decimals)
+    _, now = newest_timeline(keyframed)
+    assert _common.signature_hash(_common.timeline_signature(now)) != _common.signature_hash(old), \
+        "the stored signature must differ, so this exercises the value tolerance"
+    state = edit_check(keyframed)
+    assert state["edited"] is False, state
+
+
+def test_small_real_keyframe_edit_is_still_an_edit(keyframed):
+    def nudge(data):
+        six_decimals(data)
+        kf = video_segments(data)[0]["common_keyframes"][0]["keyframe_list"][-1]
+        kf["values"] = [kf["values"][0] + 0.01]  # about 10 px on a 1920 px tall canvas
+    resave(keyframed, nudge)
+    state = edit_check(keyframed)
+    assert state["edited"] is True and any("keyframes" in c for c in state["changes"]), state
+
+
+def lower_volume(data):
+    video_segments(data)[0]["volume"] = 0.3
+
+
+def test_edit_counts_whatever_the_file_times(built):
+    """CapCut 9.7.1 saves an edit to draft_content.json only. Once a copy, sync or restore resets the
+    file times, the untouched draft_info.json can be the newest file."""
+    _, _, folder = built
+    resave(folder, lower_volume)
+    later = time.time() + 600
+    os.utime(folder / "draft_info.json", (later, later))
+    state = edit_check(folder)
+    assert state["edited"] is True and any("volume" in c for c in state["changes"]), state
+
+
+def test_capcut_9_main_timeline_is_the_live_one(built):
+    """After CapCut 9.7.1 opens a draft, both draft_info.json files stay as they were at that moment;
+    edits go to draft_content.json at the top level and in Timelines/<main id>/."""
+    _, _, folder = built
+    main = open_in_capcut(folder)
+    data = read(folder / "draft_info.json")
+    lower_volume(data)
+    for p in (folder / "draft_content.json", folder / "Timelines" / main / "draft_content.json"):
+        p.write_text(json.dumps(data), encoding="utf-8")
+    stale = time.time() + 600
+    for p in (folder / "draft_info.json", folder / "Timelines" / main / "draft_info.json"):
+        os.utime(p, (stale, stale))  # newest by file time, but not the timeline CapCut reads
+    path, _ = newest_timeline(folder)
+    assert path == folder / "Timelines" / main / "draft_content.json"
+    assert edit_check(folder)["edited"] is True

@@ -17,7 +17,10 @@ older and newer CapCut builds read different ones), `draft_meta_info.json`, `.ca
 of the spec, which also marks the draft as one this tool made) and `.cappus-build.json` (a fingerprint
 of the timeline as built: clip timing, source ranges, speed, volume, transforms, effects, keyframes, and
 audio tools once turned on (Reduce noise, Normalize loudness, Isolate voice, channels, beat markers); no ids, so CapCut re-saving the file on open does not change it; CapCut also re-measures media lengths on
-open, so timings within 0.05 s count as unchanged). A draft with `remove_bg` clips
+open, so timings within 0.05 s count as unchanged; it saves values with 6 decimals, so values within
+0.0002 count as unchanged too). The check reads every timeline file in the draft, not only the newest,
+because CapCut 9.7 leaves both `draft_info.json` files as they were when it first opened the draft and
+file times mean nothing once a draft is copied, synced or restored. A draft with `remove_bg` clips
 also gets a `matting/` folder when CapCut first opens it. It holds CapCut's cutout masks, about
 3 MB per second of video, and CapCut rebuilds it if it is missing. A draft that replaces one
 CapCut 9 has already opened also gets `Timelines/project.json` and `Timelines/<id>/` (see
@@ -33,7 +36,9 @@ encrypts its drafts and is not supported. The mobile app does not open desktop d
 ## Revising a draft
 
 1. `inspect_draft.py "<name>"` - shows the timeline, `edited_in_capcut_since_build` and, when it
-   is true, `changes_in_capcut` (e.g. "track 1 (video) item at 4.00s: volume changed").
+   is true, `changes_in_capcut` (e.g. "track 1 (video) item at 4.00s: volume changed"). A bare name
+   is looked up in CapCut's drafts folder first, even when the current folder has a folder of that
+   name; pass a path (`./name` or an absolute path) to inspect a folder elsewhere.
 2. If the user did not edit it in CapCut: change the spec, `build_draft.py spec.json --overwrite`.
    `--overwrite` checks the fingerprint itself and refuses if the timeline changed.
 3. If they did: ask first. Either build with a new `name` (e.g. "... v2") so both versions exist, or,

@@ -4,6 +4,7 @@ from __future__ import annotations
 import difflib
 import hashlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -16,8 +17,8 @@ except ImportError:  # pragma: no cover
         f"Run:  {sys.executable} -m pip install -r \"{req}\""
     )
 
-from _env import (backups_dir, config_path, find_drafts_dir, load_config,  # noqa: F401 (used by the scripts)
-                  save_config, user_tier)
+from _env import (backups_dir, config_path, draft_folder, find_drafts_dir,  # noqa: F401 (used by the scripts)
+                  load_config, save_config, user_tier)
 
 # Windows consoles default to a legacy code page; catalog names are often CJK.
 for _stream in (sys.stdout, sys.stderr):
@@ -221,8 +222,11 @@ _TOOL_KINDS = {"realtime_denoises", "loudnesses", "vocal_separations", "sound_ch
 
 
 def _r(value, nd=4):
+    """Round for the signature. CapCut saves floats with 6 decimals, so round to 6 first: otherwise a
+    value on a rounding boundary flips (built -0.20375000000000001 is -0.2038, CapCut's -0.20375 is
+    -0.2037) and a draft that was only opened reads as edited."""
     try:
-        return round(float(value), nd)
+        return round(round(float(value), 6), nd)
     except (TypeError, ValueError):
         return None
 
@@ -340,13 +344,23 @@ def timeline_signature(data: dict) -> dict:
             "fps": _r(data.get("fps"), 2), "tracks": tracks}
 
 
-def _close(a, b) -> bool:
+# Values (transform, opacity, speed, volume, keyframe values) this close are the same value: the signature
+# keeps 4 decimals, so one rounding step apart is noise (signatures stored before _r rounded to 6 decimals
+# first can differ by that much from a re-saved draft). Far below any change a user makes in CapCut.
+_VALUE_SLACK = 2e-4
+
+
+def _near(a, b, slack) -> bool:
     if isinstance(a, list) and isinstance(b, list):
-        return len(a) == len(b) and all(_close(x, y) for x, y in zip(a, b))
+        return len(a) == len(b) and all(_near(x, y, slack) for x, y in zip(a, b))
     nums = (int, float)
     if isinstance(a, nums) and isinstance(b, nums) and not isinstance(a, bool) and not isinstance(b, bool):
-        return abs(a - b) <= _SLACK_US
+        return abs(a - b) <= slack
     return a == b
+
+
+def _close(a, b) -> bool:
+    return _near(a, b, _SLACK_US)
 
 
 _FIELD_NAMES = {"gap": "position", "dur": "length", "src": "trim", "clip": "transform",
@@ -359,7 +373,13 @@ def _segment_changes(x: dict, y: dict) -> list:
         if k == "t":
             continue
         a, b = x.get(k), y.get(k)
-        if not (_close(a, b) if k in ("gap", "dur", "src") else a == b):
+        if k in ("gap", "dur", "src"):
+            same = _close(a, b)
+        elif k in ("clip", "keyframes", "speed", "volume"):
+            same = _near(a, b, _VALUE_SLACK)
+        else:
+            same = a == b
+        if not same:
             out.append(_FIELD_NAMES.get(k, k))
     return out
 
@@ -374,18 +394,49 @@ BUILD_FILE = ".cappus-build.json"  # timeline signature at build time, to detect
 BACKUPS_KEPT = 5                   # per draft name
 
 
+# CapCut's timeline ids. Also keeps a path such as "../x" in Timelines/project.json out of file names.
+TIMELINE_ID = re.compile(r"[0-9A-Za-z-]{1,64}")
+
+
+def timeline_files(folder: Path) -> list:
+    """Every timeline file in a draft folder: the top-level pair and the copies under Timelines/<id>/."""
+    return [p for name in ("draft_info.json", "draft_content.json")
+            for p in [folder / name] + sorted(folder.glob(f"Timelines/*/{name}")) if p.is_file()]
+
+
+def load_timeline(path: Path):
+    """The parsed timeline, or None when the file is not plain JSON (an encrypted JianYing draft)."""
+    try:
+        return json.loads(path.read_bytes().decode("utf-8-sig"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+
+
+def main_timeline_file(folder: Path):
+    """Timelines/<id>/draft_content.json for the main timeline Timelines/project.json names, or None.
+
+    Once CapCut 9 has opened a draft, that file holds the live timeline. CapCut 9.7.1 writes the
+    top-level draft_info.json and Timelines/<id>/draft_info.json only when it first opens the draft,
+    and never again, so after a copy, sync or restore resets file times, "newest" can pick one of those."""
+    try:
+        main = json.loads((folder / "Timelines" / "project.json").read_bytes().decode("utf-8-sig"))["main_timeline_id"]
+    except (OSError, UnicodeDecodeError, ValueError, KeyError, TypeError):
+        return None
+    if not isinstance(main, str) or not TIMELINE_ID.fullmatch(main):
+        return None
+    path = folder / "Timelines" / main / "draft_content.json"
+    return path if path.is_file() else None
+
+
 def newest_timeline(folder: Path):
-    """(path, data) of the timeline file CapCut saved last, or (None, None) when there is none.
-    data is None when the file is not plain JSON (an encrypted JianYing draft, for example)."""
-    files = [p for name in ("draft_info.json", "draft_content.json")
-             for p in [folder / name] + sorted(folder.glob(f"Timelines/*/{name}")) if p.is_file()]
+    """(path, data) of the draft's live timeline, or (None, None) when there is none: CapCut 9's main
+    timeline when the draft has one, else the timeline file CapCut saved last. data is None when the
+    file is not plain JSON (an encrypted JianYing draft, for example)."""
+    files = timeline_files(folder)
     if not files:
         return None, None
-    path = max(files, key=lambda f: f.stat().st_mtime)
-    try:
-        return path, json.loads(path.read_bytes().decode("utf-8-sig"))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
-        return path, None
+    path = main_timeline_file(folder) or max(files, key=lambda f: f.stat().st_mtime)
+    return path, load_timeline(path)
 
 
 def describe_changes(old: dict, new: dict, limit: int = 8) -> list:
@@ -424,25 +475,34 @@ def edit_check(folder: Path) -> dict:
 
     Returns {"edited": True / False / None (cannot tell), "how": ..., "changes": [...]}.
     """
-    path, data = newest_timeline(folder)
-    if path is None:
+    files = timeline_files(folder)
+    if not files:
         return {"edited": None, "how": "the draft has no timeline file"}
-    if data is None:
-        return {"edited": None, "how": f"{path.name} is not plain JSON"}
+    readable = [(p, d) for p, d in ((p, load_timeline(p)) for p in files) if isinstance(d, dict)]
+    if not readable:
+        return {"edited": None, "how": f"{files[0].name} is not plain JSON"}
     try:
         stored = json.loads((folder / BUILD_FILE).read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         stored = None
     old = stored.get("signature") if isinstance(stored, dict) else None
     if isinstance(old, dict) and old.get("v") == SIG_VERSION:
-        now = timeline_signature(data)
-        if signature_hash(now) == stored.get("signature_sha256"):
-            return {"edited": False, "how": "timeline matches the build"}
-        changes = describe_changes(old, now)
-        if not changes:
-            return {"edited": False, "how": "timeline matches the build (CapCut adjusted some timings by "
-                                           "a few milliseconds)"}
-        return {"edited": True, "how": "timeline differs from the build", "changes": changes}
+        # Every timeline file, not only the newest: CapCut leaves some of them as they were when it
+        # first opened the draft, and file times mean nothing once a draft is copied, synced or restored.
+        adjusted = False
+        for path, data in sorted(readable, key=lambda pd: pd[0].stat().st_mtime, reverse=True):
+            now = timeline_signature(data)
+            if signature_hash(now) == stored.get("signature_sha256"):
+                continue
+            changes = describe_changes(old, now)
+            if changes:
+                return {"edited": True, "how": f"timeline differs from the build "
+                                               f"({path.relative_to(folder).as_posix()})", "changes": changes}
+            adjusted = True
+        if adjusted:
+            return {"edited": False, "how": "timeline matches the build (CapCut re-measured some timings or "
+                                           "rounded some values)"}
+        return {"edited": False, "how": "timeline matches the build"}
     # Built by cappus 0.4 or older, which kept no signature: compare file times. CapCut rewrites the
     # timeline when it merely opens a draft, so this also reports drafts that were only opened.
     try:
