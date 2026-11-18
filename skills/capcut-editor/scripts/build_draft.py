@@ -27,8 +27,8 @@ import time
 import uuid
 from pathlib import Path
 
-from _common import (BACKUPS_KEPT, BUILD_FILE, MARKER, SpecError, backups_dir, cc, edit_check, find_drafts_dir,
-                     label, param_names, resolve, signature_hash, timeline_signature, user_tier)
+from _common import (BACKUPS_KEPT, BUILD_FILE, MARKER, TIMELINE_ID, SpecError, backups_dir, cc, edit_check,
+                     find_drafts_dir, label, param_names, resolve, signature_hash, timeline_signature, user_tier)
 
 from pycapcut import assets as cc_assets
 from pycapcut.script_file import ScriptFile
@@ -1231,9 +1231,6 @@ def write_draft(builder: Builder, drafts_dir: Path, name: str, overwrite: bool, 
         _drop(staged.parent)
         return target, None
     return target, back_up(staged, name)
-
-
-TIMELINE_ID = re.compile(r"[0-9A-Za-z-]{1,64}")
 
 
 def _timelines(old: Path, content: str) -> tuple:

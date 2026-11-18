@@ -30,8 +30,8 @@ import sys
 import zlib
 from pathlib import Path
 
-from _common import (KINDS, UNAVAILABLE_FILE, SpecError, alias_for, config_path, find_drafts_dir, is_pro,
-                     label, unavailable, unavailable_note)
+from _common import (KINDS, UNAVAILABLE_FILE, SpecError, alias_for, config_path, draft_folder, find_drafts_dir,
+                     is_pro, label, unavailable, unavailable_note)
 from build_draft import MARKER, Builder, write_draft
 
 GROUPS = {
@@ -299,10 +299,8 @@ def cmd_read(args) -> int:
     drafts = find_drafts_dir(args.drafts_dir)
     folders, problems = [], []
     for name in args.draft or [PROBE_NAME]:
-        folder = Path(name)
-        if not folder.is_dir() and drafts is not None:
-            folder = drafts / name
-        if not folder.is_dir():
+        folder = draft_folder(name, drafts)
+        if folder is None:
             problems.append(f"draft '{name}' not found")
             continue
         try:
