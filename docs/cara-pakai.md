@@ -207,8 +207,11 @@ cocok. Kalau Anda punya efek favorit di CapCut, sebut namanya; Claude akan menca
 9. **Melapor:** nama draft, alasan di balik edit, bagian yang perlu Anda cek, dan hal yang perlu
    diselesaikan di CapCut.
 
-Claude **tidak bisa menonton hasil render**. Karena itu selalu putar hasilnya di CapCut sebelum
-ekspor, terutama bagian yang Claude minta untuk dicek.
+Kalau computer use aktif, Claude membuka draft di CapCut dan melihatnya sendiri. Kalau tidak,
+Claude membuat **preview kasar** dengan ffmpeg (`preview.py`): video kecil 540x960 dan contact sheet,
+lalu memeriksa potongan, framing, dan posisi teks dari situ. Preview ini hanya perkiraan: efek,
+filter, transisi, animasi, mask, dan font asli CapCut tidak digambar. Karena itu selalu putar hasilnya
+di CapCut sebelum ekspor, terutama bagian yang Claude minta untuk dicek.
 
 ## 5. Membuka hasil di CapCut
 
@@ -432,6 +435,18 @@ python skills/capcut-editor/scripts/build_draft.py spec.json
 
 Contoh spec lengkap ada di [`examples/demo.json`](../examples/demo.json). Media untuk contoh itu bisa
 dibuat dengan `python examples/make_test_media.py`.
+
+**Melihat preview tanpa CapCut:**
+
+```bash
+python skills/capcut-editor/scripts/preview.py spec.json --out folder-preview
+```
+
+Hasilnya `folder-preview/preview.mp4` (540x960, 15 fps) dan `folder-preview/sheet.jpg`, berisi
+cuplikan tiap beberapa detik yang diberi label waktu dan id klip. Klip, framing, gerakan kamera,
+posisi teks, dan audio mengikuti spec. Efek, filter, transisi, animasi, mask, dan font asli tidak
+digambar, dan tiap frame diberi cap "PREVIEW - approximate". Opsi: `--size 640` untuk sisi terpanjang
+dalam piksel, `--fps 10`, dan `--every 0.5` untuk satu cuplikan tiap setengah detik.
 
 **Membaca draft yang sudah ada:**
 

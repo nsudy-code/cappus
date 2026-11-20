@@ -212,7 +212,10 @@ timing so the first draft already looks designed:
 - **Music**: no track? cappus generates one that is free to use, on an exact beat grid, so every cut
   and word lands on the beat. Swap in a CapCut library song with the same BPM later if you like.
 - **Checked before you see it**: with computer use on, Claude opens the draft in CapCut and looks
-  at it before handing it over.
+  at it before handing it over. Without it, Claude renders a rough low-res preview with ffmpeg
+  (`preview.py`) and checks the cut, framing and text placement on its contact sheet. That preview
+  leaves out CapCut's effects, filters, transitions and fonts, so it only stands in for a look at the
+  timing and layout.
 
 ### Captions
 
@@ -277,6 +280,7 @@ JSON and has `--help`.
 | `catalog.py` | Search the CapCut resources: transitions, effects, filters, animations, fonts |
 | `build_draft.py` | Validate a spec (`--check`) and write it as a CapCut draft |
 | `inspect_draft.py` | Read an existing draft, including your manual edits in CapCut |
+| `preview.py` | Render an approximate low-res MP4 and a contact sheet of a spec with ffmpeg, without CapCut |
 | `tier.py` | Show or set your CapCut plan (free or Pro) |
 | `doctor.py` | Check the setup: Python, packages, ffmpeg, CapCut desktop and its drafts folder |
 | `looks.py` | List the looks (font pairing, colors, motion, music) or show one |
@@ -298,6 +302,15 @@ python skills/capcut-editor/scripts/build_draft.py examples/demo.json --check
 ```bash
 python skills/capcut-editor/scripts/build_draft.py examples/demo.json --overwrite
 ```
+
+```bash
+python skills/capcut-editor/scripts/preview.py examples/demo.json --out demo-preview
+```
+
+The last command writes `demo-preview/preview.mp4` (540x960, 15 fps) and `demo-preview/sheet.jpg`.
+It is an approximation stamped "PREVIEW - approximate": clips, framing, motion, text positions and
+audio follow the spec, but effects, filters, transitions, animations, masks and the real fonts are
+not drawn.
 
 Then open the `cappus-demo` draft in CapCut. `examples/demo-pro.json` shows Pro resources and needs
 `--allow-pro` or a Pro setting.
@@ -327,6 +340,7 @@ skills/capcut-editor/
     catalog.py              Resource search
     build_draft.py          Spec to CapCut draft
     inspect_draft.py        Read existing drafts
+    preview.py              Approximate ffmpeg preview and contact sheet of a spec
     tier.py                 Free or Pro setting
     doctor.py               Setup check
     looks.py, looks.json    Tested looks
