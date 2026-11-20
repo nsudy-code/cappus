@@ -4,6 +4,11 @@ Panduan ini untuk orang yang mau memakai skill `capcut-editor`: memasang, memint
 membuka hasilnya di CapCut, dan merevisi. Detail teknis format spec ada di
 [`edit-spec.md`](../skills/capcut-editor/references/edit-spec.md).
 
+**Video tutorial (90 detik, bahasa Inggris):** satu folder berisi 22 klip, dari memasang cappus
+sampai jadi reel yang masih bisa diedit di CapCut.
+
+[![Video tutorial cappus](video-tutorial.jpg)](https://youtu.be/Jne3_vhNHUs)
+
 ## Isi
 
 1. [Cara kerjanya](#1-cara-kerjanya)
