@@ -163,8 +163,9 @@ what good looks like, so every decision below is yours. Do not ask which clips t
    action moves). Vertical footage on a vertical canvas just uses `cover`. A wide shot with two
    people or a group loses someone in a vertical crop: use `"fit": "contain"` with
    `"background": "blur"` for it, or skip it.
-7. **Words on footage.** A title on the hook and a closing line, in the look's styles (`cinematic`
-   is the default for footage: huge condensed Anton in white over a small Poppins label). No heavy drop shadow: a
+7. **Words on footage.** A title on the hook and a closing line, in the look's styles and the
+   font pairing from `looks.py suggest` (for footage it usually picks `cinematic`: a huge condensed
+   headline in white over a small label; the fonts vary between edits). No heavy drop shadow: a
    big shadow looks cheap. Legibility comes from placement: put text at the shot's `text_y` (the
    calmest, darkest band), never over a bright sky, fireworks or a face. Kinetic words fit footage too: a few
    `slam` words on the drop over the action, not a word on every beat. Captions only when someone
