@@ -57,6 +57,8 @@ def _fill(value, palette):
         return palette.get(value[1:], value)
     if isinstance(value, dict):
         return {k: _fill(v, palette) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_fill(v, palette) for v in value]
     return value
 
 

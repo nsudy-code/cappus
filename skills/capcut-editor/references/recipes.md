@@ -184,6 +184,18 @@ what good looks like, so every decision below is yours. Do not ask which clips t
    look's `title` / `big` styles; at most 3-5 words on screen at a time.
 6. Hard cuts on beats; one transition from the look's family at the drop and one before the end.
 
+## Color that reads (and does not repeat the background)
+
+- The footage's most common color is its background (sea, sky, leaves): never use it for text. The
+  accent `scan_footage.py` reports is the strongest color far from it (the sunset's orange in beach
+  footage), and `looks.py suggest` passes it on.
+- One accent, on one or two key words per section; everything else white (or dark on bright
+  backgrounds). The looks' color lists already fall back to white or dark where the accent would wash
+  out, and the builder checks every text against the frame behind it.
+- Dark text only over truly bright areas (sand, snow, sky, a white wall); night, sunset and busy
+  shots get white. A title and its label share the same tone.
+- Fix a contrast warning by moving the text to the shot's `text_y`, not by adding a shadow.
+
 ## Writing on-screen text that works
 
 - **Short lines.** At most about 16 characters per line at the look's sizes; the builder warns

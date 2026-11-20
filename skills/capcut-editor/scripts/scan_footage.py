@@ -82,6 +82,10 @@ def shift(a, b):
     return float(x), float(y)
 
 
+def hex_of(rgb):
+    return "#" + "".join(f"{int(round(min(1, max(0, v)) * 255)):02X}" for v in rgb)
+
+
 def smooth(x, k=5):
     """Moving average with the ends held (no dip toward zero at the edges)."""
     k = min(k, len(x)) | 1
@@ -319,12 +323,13 @@ def main() -> int:
 
     ranked = [r for r in rows if r["duplicate_of"] is None]
 
-    # the footage's own accent color: the most common vivid hue across the keepers, made bright enough
-    # to read as text (a sunset gives orange, a reef teal, a party magenta)
+    # Text accent from the footage. The most common hue is the background (sea, sky, foliage), so text
+    # in that hue disappears into it. Use the strongest vivid hue far from it (a sunset's orange in
+    # beach footage, a red jacket on a mountain), else its complement; warm and bright enough to read.
     px = np.concatenate([r["thumb"].reshape(-1, 3) for r in ranked if r["score"] >= 50] or [ranked[0]["thumb"].reshape(-1, 3)])
     hi, lo = px.max(axis=1), px.min(axis=1)
     vivid = px[((hi - lo) / np.maximum(hi, 1e-6) > 0.45) & (hi > 0.35)]
-    accent = None
+    accent, dominant = None, None
     if len(vivid) > 200:
         r_, g_, b_ = vivid[:, 0], vivid[:, 1], vivid[:, 2]
         mx = vivid.max(axis=1)
@@ -332,10 +337,18 @@ def main() -> int:
         d = np.maximum(mx - mn, 1e-6)
         hue = np.where(mx == r_, ((g_ - b_) / d) % 6, np.where(mx == g_, (b_ - r_) / d + 2, (r_ - g_) / d + 4)) / 6
         bins = np.floor(hue * 12).astype(int) % 12
-        top = np.bincount(bins, minlength=12).argmax()
-        c = vivid[bins == top].mean(axis=0)
-        c = c / max(c.max(), 1e-6)  # full brightness keeps the hue and reads on footage
-        accent = "#" + "".join(f"{int(round(v * 255)):02X}" for v in c)
+        counts = np.bincount(bins, minlength=12)
+        top = int(counts.argmax())
+        dominant = hex_of(vivid[bins == top].mean(axis=0))
+        far = [b for b in range(12) if min((b - top) % 12, (top - b) % 12) >= 3 and counts[b] >= max(50, counts.sum() * 0.02)]
+        if far:
+            pick = max(far, key=lambda b: counts[b])
+            c = vivid[bins == pick].mean(axis=0)
+        else:  # one-hue footage: the complement of the background hue
+            h = ((top + 6) % 12 + 0.5) / 12
+            import colorsys
+            c = np.array(colorsys.hsv_to_rgb(h, 0.75, 1.0))
+        accent = hex_of(c / max(c.max(), 1e-6))  # full brightness keeps the hue and reads on footage
     energy = float(np.median([r["stats"]["motion"] for r in ranked])) if ranked else 0.0
     lights = {}
     for r in ranked:
@@ -352,7 +365,7 @@ def main() -> int:
         s["rank"] = i
     report = {"files": len(files), "shots": len(rows), "keepers": sum(1 for s in shots if s["score"] >= 50),
               "duplicates": [clean(r) for r in dupes], "target": {"exposure": round(t_mean, 3), "saturation": round(t_sat, 3)},
-              "palette": {"accent": accent, "energy": round(energy, 4),
+              "palette": {"accent": accent, "background_hue": dominant, "energy": round(energy, 4),
                           "pace": "high" if energy > 0.03 else "low", "light": lights},
               "ranked": shots,
               "note": "Use shots with score >= 50, best window first. 'adjust' goes into the clip's \"adjust\"; "

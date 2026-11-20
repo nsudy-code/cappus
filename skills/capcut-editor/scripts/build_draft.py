@@ -30,6 +30,7 @@ from pathlib import Path
 from _common import (BACKUPS_KEPT, BUILD_FILE, MARKER, TIMELINE_ID, SpecError, backups_dir, cc, edit_check,
                      find_drafts_dir, label, param_names, resolve, signature_hash, timeline_signature, user_tier)
 
+import contrast
 import looks as looks_mod
 import motion
 from _common import font_width
@@ -247,6 +248,10 @@ class Builder:
         self._track_count: dict = {}
         self.styles = self.resolve_styles(spec)
         self._fit_warned: set = set()
+        self.main_clips: list = []  # what plays on the main track, for the contrast check
+        self._picked: list = []      # (start, white or dark) chosen so far, to keep pairs alike
+        self._outline = None
+        self.notes: list = []        # things the builder decided for you, for the report
 
     # ---------- looks, motion presets, text fit ----------
     @staticmethod
@@ -290,6 +295,104 @@ class Builder:
                 base = [[float(t) + dur if float(t) < 0 else float(t), v] for t, v in kf.get(prop, [])]
                 kf[prop] = motion.merge(sorted(base), added, window, build)
         return kf
+
+    def text_color(self, text, st, start, dur, ctx):
+        """Resolve "color": "auto" and warn when the text color washes into the footage behind it."""
+        color = st.get("color", "#FFFFFF")
+        if isinstance(color, list):  # a preference order: the first that reads, "auto" = white or dark
+            return self.pick_color(text, st, start, dur, ctx, color)
+        t = (start + min(400_000, dur // 2)) / 1e6  # after a fade-in or a transition has settled
+        clip = next((c for c in self.main_clips if c["start"] <= t < c["end"]), None)
+        pixels = None
+        if clip is not None:
+            member = self.res("font", st["font"]) if st.get("font") else None
+            k, caps_only = font_width(member) if member is not None else (2.6, False)
+            lines = str(text).split("\n")
+            size = float(st.get("size", 8)) * float(st.get("scale", 1.0))
+            longest = max(lines, key=len)
+            caps = longest.upper() == longest and not caps_only
+            box_w = min(self.width, len(longest) * k * size * (1.15 if caps else 1.0) * self.width / 1080)
+            box_h = size * 5 * len(lines) * self.height / 1920
+            pixels = contrast.behind(clip, t, (self.width, self.height), float(st.get("x", 0)), float(st.get("y", 0)),
+                                     box_w, box_h)
+        if pixels is None:
+            return contrast.WHITE if color == "auto" else color
+        guarded = (st.get("stroke") or {}).get("width", 0) >= 20 or bool(st.get("background"))
+        if color == "auto":
+            best = contrast.judge(pixels, contrast.WHITE)[1]
+            score = contrast.judge(pixels, best)[0]
+            if score < contrast.READABLE and not guarded:
+                self.warnings.append(f"{ctx}: '{str(text)[:24]}' has no readable color at {t:.1f}s (best {score:.1f}:1 "
+                                     "against the footage behind it); move it to the shot's calmer band (text_y) "
+                                     "or give it a stroke.")
+            return best
+        try:
+            score = contrast.judge(pixels, color)[0]
+        except (ValueError, IndexError):
+            return color
+        if score < contrast.READABLE and not guarded:
+            best = contrast.judge(pixels, contrast.WHITE)[1]
+            self.warnings.append(f"{ctx}: '{str(text)[:24]}' in {color} is {score:.1f}:1 against the footage behind it "
+                                 f"at {t:.1f}s, too low to read (aim for 3:1 or more). Use \"color\": \"auto\" "
+                                 f"({best} here), another accent, a stroke, or move it to the shot's text_y.")
+        return color
+
+    def pick_color(self, text, st, start, dur, ctx, prefs):
+        """The first color in prefs that reaches 3:1 against the footage behind the text."""
+        if not prefs or not all(isinstance(c, str) for c in prefs):
+            raise SpecError(f"{ctx}.color: a list must hold colors ('#RRGGBB') or \"auto\"")
+        for c in prefs:
+            if c != "auto":
+                hex_rgb(c, f"{ctx}.color")
+        pixels = self._behind(text, st, start, dur)
+        if pixels is None:
+            return next((c for c in prefs if c != "auto"), contrast.WHITE)
+        # a text that comes in with another (a title and its label) keeps the same light or dark color
+        partner = next((c for t0, c in reversed(self._picked) if abs(t0 - start) <= 1_200_000), None)
+        if partner and partner in (contrast.WHITE, contrast.DARK) and "auto" in prefs:
+            light = contrast.luminance(contrast.hex_rgb(partner)) > 0.4
+            same = next((c for c in prefs if c != "auto" and (contrast.luminance(contrast.hex_rgb(c)) > 0.4) == light),
+                        partner)
+            if contrast.judge(pixels, same)[0] >= 2.5:
+                self._picked.append((start, same))
+                return same
+        scored = []
+        for c in prefs:
+            c = contrast.judge(pixels, contrast.WHITE)[1] if c == "auto" else c
+            score = contrast.judge(pixels, c)[0]
+            if score >= contrast.READABLE:
+                self._picked.append((start, contrast.WHITE if contrast.luminance(contrast.hex_rgb(c)) > 0.4 else contrast.DARK))
+                return c
+            scored.append((score, c))
+        score, best = max(scored)
+        guarded = (st.get("stroke") or {}).get("width", 0) >= 20 or bool(st.get("background"))
+        if not guarded:
+            if score >= 1.6:
+                # busy footage: a thin outline in the opposite tone, not a drop shadow
+                light = contrast.luminance(contrast.hex_rgb(best)) > 0.4
+                self._outline = {"color": "#000000" if light else "#FFFFFF", "width": 18, "opacity": 0.6}
+                self.notes.append(f"{ctx}: '{str(text)[:24]}' sits on busy footage ({score:.1f}:1), so it got a thin "
+                                  "outline; moving it to a calmer band would read better still.")
+            else:
+                self.warnings.append(f"{ctx}: '{str(text)[:24]}' has no readable color here (best {best}, {score:.1f}:1 "
+                                     "against the footage behind it); move it to the shot's calmer band (text_y).")
+        return best
+
+    def _behind(self, text, st, start, dur):
+        t = (start + min(400_000, dur // 2)) / 1e6
+        clip = next((c for c in self.main_clips if c["start"] <= t < c["end"]), None)
+        if clip is None:
+            return None
+        member = self.res("font", st["font"]) if st.get("font") else None
+        k, caps_only = font_width(member) if member is not None else (2.6, False)
+        lines = str(text).split("\n")
+        size = float(st.get("size", 8)) * float(st.get("scale", 1.0))
+        longest = max(lines, key=len)
+        caps = longest.upper() == longest and not caps_only
+        box_w = min(self.width, len(longest) * k * size * (1.15 if caps else 1.0) * self.width / 1080)
+        box_h = size * 5 * len(lines) * self.height / 1920
+        return contrast.behind(clip, t, (self.width, self.height), float(st.get("x", 0)), float(st.get("y", 0)),
+                               box_w, box_h)
 
     def check_fit(self, text, st, member, ctx):
         """Warn once per item when a line is likely wider than the wrap width (it would wrap onto an
@@ -720,6 +823,11 @@ class Builder:
                 check_keys(c, MAIN_KEYS, ctx)
                 seg = self.make_video(c, cursor, ctx)
                 segs.append((seg, c, ctx))
+                self.main_clips.append({
+                    "src": seg._mat.path, "in": seg.source_timerange.start / 1e6, "start": cursor / 1e6,
+                    "end": (cursor + seg.duration) / 1e6, "speed": float(c.get("speed", 1.0)),
+                    "photo": seg._mat.material_type == "photo", "fit": c.get("fit") or "contain",
+                    "tx": float((c.get("transform") or {}).get("x", 0)), "w": seg._mat.width, "h": seg._mat.height})
                 self.register(c, "clip", cursor, seg.duration, track, Path(seg._mat.path).name)
                 cursor += seg.duration
             except ITEM_ERRORS as e:
@@ -869,6 +977,8 @@ class Builder:
         align = {"left": 0, "center": 1, "right": 2}.get(st.get("align", "center"))
         if align is None:
             raise SpecError(f"{ctx}: align must be left, center or right")
+        if isinstance(st.get("color"), list):
+            st = dict(st, color=next((c for c in st["color"] if c != "auto"), "#FFFFFF"))
         wrap = st.get("wrap", 0.82)
         if wrap is True:
             wrap = 0.82
@@ -1005,6 +1115,10 @@ class Builder:
                 if st.get("fit_width"):
                     st = dict(st, size=self.fit_size(item["text"], st, ctx))
                     st.setdefault("wrap", False)
+                self._outline = None
+                st = dict(st, color=self.text_color(item["text"], st, start, dur, ctx))
+                if self._outline and not st.get("stroke"):
+                    st["stroke"] = self._outline
                 seg = self.make_text(item["text"], start, dur, st, ctx)
                 kf = dict(item.get("keyframes") or {})
                 sc = float(st.get("scale", 1.0))
@@ -1257,6 +1371,7 @@ class Builder:
             **({"pro_note": "Exporting this draft needs CapCut Pro on the account that exports it."}
                if pro else {}),
             "warnings": self.warnings,
+            **({"notes": self.notes} if self.notes else {}),
         }
 
 

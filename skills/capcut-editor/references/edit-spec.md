@@ -139,6 +139,16 @@ text `enter` with a catalog `intro` such as `fade_in` when it should also fade.
   fill, white stroke; or `"style": "<name>"` / `color` / `stroke` for the copies). `"echo": true`
   uses those defaults.
 
+## Text contrast
+
+For every text over the main track, the builder grabs the frame behind it, measures the area the text
+covers, and compares it with the text color (WCAG contrast). Under 3:1 it warns with the color that
+would read there; with `"auto"` or a color list it picks one. Where nothing reaches 3:1 but the
+footage is just busy (1.6:1 or more) it adds a thin outline in the opposite tone (never a drop shadow)
+and says so under `notes`. A text and the one that comes in with it (within 1.2 s) keep the same
+light or dark color. Captions and texts with a stroke of 20 or more or a background box are not
+checked.
+
 ## Text fit warnings
 
 `--check` estimates how wide each text line is from its font (`scripts/fonts.json`, measured in
@@ -203,7 +213,7 @@ the style.
 |---|---|---|
 | `font` | system | Kind `font` (`catalog.py font <keyword>`). Check the font covers your language. |
 | `size` | 8 | CapCut font size. On 1080x1920: captions 7-10, titles 12-18, single big words 20-30. A first guess - tell the user to eyeball it. |
-| `color` | `#FFFFFF` | `#RRGGBB`. |
+| `color` | `#FFFFFF` | `#RRGGBB`; `"auto"` (white or dark, whichever reads over the footage behind it); or a preference list such as `["#FFA16B", "#FFFFFF", "auto"]`: the first that reaches 3:1 contrast. Looks use lists, so an accent falls back to white or dark where it would wash out. |
 | `bold`, `italic`, `underline` | false | |
 | `align` | `center` | `left`, `center`, `right`. |
 | `wrap` | 0.82 | Max line width as a fraction of canvas width; `false` disables wrapping. |

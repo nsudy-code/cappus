@@ -17,18 +17,29 @@
     "title": {
      "font": "anton",
      "size": 15,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": "punch"
     },
     "accent": {
      "font": "anton",
      "size": 20,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "enter": "punch"
     },
     "big": {
      "font": "anton",
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "enter": "pop",
      "size_max": 30,
      "fit_width": 0.82,
@@ -37,7 +48,10 @@
     "label": {
      "font": "poppins_bold",
      "size": 7,
-     "color": "$muted",
+     "color": [
+      "$muted",
+      "auto"
+     ],
      "intro": {
       "name": "reveal_up",
       "duration": 0.3
@@ -127,20 +141,31 @@
      "font": "poppins_bold",
      "size": 12,
      "bold": true,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": "rise"
     },
     "accent": {
      "font": "poppins_bold",
      "size": 15,
      "bold": true,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "enter": "rise"
     },
     "big": {
      "font": "poppins_bold",
      "bold": true,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "enter": "pop",
      "size_max": 22,
      "fit_width": 0.82,
@@ -149,7 +174,10 @@
     "label": {
      "font": "poppins_bold",
      "size": 8,
-     "color": "$muted",
+     "color": [
+      "$muted",
+      "auto"
+     ],
      "intro": {
       "name": "reveal_up",
       "duration": 0.3
@@ -239,7 +267,10 @@
     "title": {
      "font": "anton",
      "size": 26,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "intro": {
       "name": "fade_in",
       "duration": 0.4
@@ -249,7 +280,11 @@
     "accent": {
      "font": "anton",
      "size": 30,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "intro": {
       "name": "fade_in",
       "duration": 0.4
@@ -258,7 +293,10 @@
     },
     "big": {
      "font": "anton",
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "intro": {
       "name": "blur_in",
       "duration": 0.5
@@ -271,7 +309,10 @@
     "label": {
      "font": "poppins_bold",
      "size": 8,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "intro": {
       "name": "fade_in",
       "duration": 0.4
@@ -407,7 +448,10 @@
      "font": "nunito",
      "size": 8,
      "bold": true,
-     "color": "$muted",
+     "color": [
+      "$muted",
+      "auto"
+     ],
      "enter": "rise"
     },
     "caption": {
@@ -494,7 +538,10 @@
      "font": "didot",
      "size": 15,
      "letter_spacing": 2,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": {
       "name": "rise",
       "duration": 0.7
@@ -504,7 +551,11 @@
      "font": "didot",
      "size": 17,
      "letter_spacing": 2,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "enter": {
       "name": "rise",
       "duration": 0.7
@@ -513,7 +564,11 @@
     "big": {
      "font": "didot",
      "letter_spacing": 3,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "intro": {
       "name": "fade_in",
       "duration": 0.8
@@ -526,7 +581,10 @@
      "font": "giveny",
      "size": 8,
      "letter_spacing": 4,
-     "color": "$muted",
+     "color": [
+      "$muted",
+      "auto"
+     ],
      "intro": {
       "name": "fade_in",
       "duration": 0.6
@@ -617,18 +675,29 @@
     "title": {
      "font": "facon",
      "size": 12,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": "slide_right"
     },
     "accent": {
      "font": "facon",
      "size": 14,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "enter": "slide_right"
     },
     "big": {
      "font": "facon",
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "enter": "punch",
      "size_max": 20,
      "fit_width": 0.82,
@@ -638,7 +707,10 @@
      "font": "bebas",
      "size": 9,
      "letter_spacing": 2,
-     "color": "$muted",
+     "color": [
+      "$muted",
+      "auto"
+     ],
      "enter": "rise"
     },
     "caption": {
@@ -717,7 +789,10 @@
      "font": "coda_heavy",
      "fit_width": 0.86,
      "size_max": 40,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": "slam",
      "drift": 0.05
     },
@@ -725,7 +800,10 @@
      "font": "coda_heavy",
      "fit_width": 0.86,
      "size_max": 40,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": "slam_tilt",
      "drift": 0.05
     },
@@ -733,7 +811,11 @@
      "font": "coda_heavy",
      "fit_width": 0.86,
      "size_max": 40,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "enter": "slam",
      "drift": 0.05
     },
@@ -741,7 +823,10 @@
      "font": "playfair_italic",
      "fit_width": 0.62,
      "size_max": 26,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "intro": {
       "name": "wave_in",
       "duration": 0.3
@@ -751,7 +836,10 @@
     "letter": {
      "font": "coda_heavy",
      "size": 44,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": "slam_tilt",
      "drift": 0.05
     },
@@ -767,7 +855,10 @@
     "title": {
      "font": "coda_heavy",
      "size": 13,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": "slam",
      "drift": 0.05
     },
@@ -775,7 +866,11 @@
      "font": "coda_heavy",
      "fit_width": 0.8,
      "size_max": 30,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "intro": {
       "name": "wave_in",
       "duration": 0.35
@@ -785,7 +880,10 @@
     "label": {
      "font": "playfair_italic",
      "size": 8,
-     "color": "$muted",
+     "color": [
+      "$muted",
+      "auto"
+     ],
      "intro": {
       "name": "typewriter",
       "duration": 0.3

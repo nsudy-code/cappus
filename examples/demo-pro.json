@@ -37,7 +37,7 @@
     {"src": "media/music.mp3", "at": 0, "end": "end", "volume": 0.5, "fade": {"in": 0.3, "out": 1.0}}
   ],
   "texts": [
-    {"text": "CAPPUS PRO", "at": 0.3, "end": "@hook.end-0.2", "style": "title"},
+    {"text": "CAPPUS PRO", "at": 0.3, "end": "@hook.end-0.2", "style": "title", "color": ["#FFFFFF", "auto"]},
     {"text": "film look + camera moves", "at": "@wide+0.2", "duration": 1.8, "style": "title",
      "size": 8, "y": -0.5, "intro": "golden_dust", "loop": "shine"}
   ],
