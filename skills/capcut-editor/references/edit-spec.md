@@ -78,7 +78,8 @@ Vertical-video safe zone (platform UI covers the rest): keep text within `y` fro
 | `fade` | `{"in": 0.3, "out": 0.3}` - fades the clip's **audio**. For a visual fade use `intro`/`outro` `fade_in`/`fade_out`. |
 | `fit` | `"contain"` (default, whole frame visible, bars if aspect differs) or `"cover"` (fill canvas, crop overflow). |
 | `background` | For `contain`: `"blur"`, `{"blur": 1-4}` or `"#RRGGBB"`. Main track only. |
-| `transform` | `{"scale", "scale_x", "scale_y", "x", "y", "rotation", "opacity", "flip_h", "flip_v"}` |
+| `transform` | `{"scale", "scale_x", "scale_y", "x", "y", "rotation", "opacity", "flip_h", "flip_v", "x_path"}` |
+| `transform.x_path` | Follow a moving subject: `[[source_seconds, x], ...]`, times rising, as `scan_footage.py` gives it in `reframe_path`. Times are in the **source file** (like `in` / `out`), so the path fits whatever part of the shot the clip plays, at any `speed`; it becomes linear `x` position keyframes on the clip, held at the end values outside the path. Use instead of `x`, not with `keyframes.x` or a pan `motion` (`push_in` / `pull_out` are fine). |
 | `motion` | Camera-move preset: `push_in`, `pull_out`, `pan_left`, `pan_right`, `pan_up`, `pan_down`, or `{"type": "push_in", "amount": 0.15}` (default amount 0.12). Runs over the whole clip. |
 | `keyframes` | `{"scale": [[0, 1.0], [2.0, 1.2]], "x": [[0, 0], [-0.01, 0.1]]}`. Time is seconds from the clip's start; **negative = from its end**. Properties: `x`, `y`, `scale`, `scale_x`, `scale_y`, `rotation`, `opacity`, `saturation`, `contrast`, `brightness` (last three: -1..1, 0 = unchanged), `volume`. Linear interpolation. Not with `motion` on the same property. |
 | `intro`, `outro` | Clip In/Out animation: `"fade_in"` or `{"name": "zoom_in", "duration": 0.4}` (kinds `video_intro`, `video_outro`). |

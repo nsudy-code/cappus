@@ -204,7 +204,8 @@ timing so the first draft already looks designed:
 - **"Turn these photos into a reel"**: cuts on the beat, motion on every photo, a few strong lines.
 - **"Make these clips into one video"**: Claude sorts a whole folder like an editor (sharp, steady,
   well-lit shots first, duplicates and bad takes out), picks the best seconds of each, tells the story
-  in the right order, matches the colors, and reframes horizontal footage around the action.
+  in the right order, matches the colors, and reframes horizontal footage around the action (the
+  vertical crop follows a subject that walks, flies or drives across the frame).
 - **Looks**: seven tested styles (`kinetic`, `bold_promo`, `clean_tech`, `cinematic`, `playful`,
   `luxury`, `street`), each a font pairing, colors, text animation and music mood. Your brand color
   is used automatically.

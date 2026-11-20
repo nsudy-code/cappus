@@ -9,7 +9,9 @@ shot: file, in/out, score 0-100 with the reasons, sharpness, exposure, saturatio
 the best window (in/out) and its peak moment, where text reads best ("text_y": 0.5 top, 0 middle,
 -0.5 bottom), duplicates and similar shots, the look of the light (day,
 golden, night, ...), a color correction toward the rest of the library ("adjust", for the spec),
-and for a vertical canvas the horizontal crop offset that keeps the action in frame ("reframe_x").
+and for a vertical canvas the horizontal crop offset that keeps the subject in frame ("reframe_x"),
+plus, when the subject moves across the frame in the best window (a walker, a bird, a car), a short
+path of [source_seconds, x] points for the crop to follow it ("reframe_path").
 
 Needs ffmpeg and numpy. Times are seconds in the source file.
 """
@@ -42,11 +44,13 @@ def probe(path):
     return {"duration": float((d.get("format") or {}).get("duration") or 0), "fps": round(fps, 3), "width": w, "height": h}
 
 
-def frames(path, width, height):
-    """RGB frames at SAMPLE_FPS, fitted into width x height (aspect kept, padded black)."""
-    vf = (f"fps={SAMPLE_FPS},scale={width}:{height}:force_original_aspect_ratio=decrease,"
+def frames(path, width, height, fps=SAMPLE_FPS, start=None, length=None):
+    """RGB frames at `fps`, fitted into width x height (aspect kept, padded black); the whole file,
+    or `length` seconds from `start`."""
+    span = ["-ss", f"{start:.3f}", "-t", f"{length:.3f}"] if start is not None else []
+    vf = (f"fps={fps},scale={width}:{height}:force_original_aspect_ratio=decrease,"
           f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2")
-    r = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-vf", vf, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
+    r = subprocess.run(["ffmpeg", "-v", "error", *span, "-i", str(path), "-vf", vf, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"],
                        capture_output=True)
     raw = np.frombuffer(r.stdout, np.uint8)
     n = raw.size // (width * height * 3)
@@ -80,6 +84,152 @@ def shift(a, b):
     if x > a.shape[1] // 2:
         x -= a.shape[1]
     return float(x), float(y)
+
+
+def aligned_motion(a, b):
+    """Per-pixel change from gray frame a to b once the camera's own move (pan, drift) is taken out."""
+    dx, dy = shift(a, b)
+    best = None
+    for sx, sy in ((dx, dy), (-dx, -dy)):  # take the sign that lines the frames up best
+        r = np.abs(b - np.roll(a, (int(sy), int(sx)), axis=(0, 1)))
+        if best is None or r.mean() < best.mean():
+            best = r
+    mx, my = int(abs(dx)) + 2, int(abs(dy)) + 2  # the wrapped-around border is not motion
+    best[:my], best[-my:], best[:, :mx], best[:, -mx:] = 0, 0, 0, 0
+    return best
+
+
+def blur(a, k):
+    """Box blur over k x k pixels (separable, edges held)."""
+    k = max(1, k) | 1
+    if k < 3:
+        return a
+    ker = np.ones(k) / k
+    a = np.pad(a, k // 2, mode="edge")
+    a = np.apply_along_axis(lambda r: np.convolve(r, ker, "valid"), 1, a)
+    return np.apply_along_axis(lambda c: np.convolve(c, ker, "valid"), 0, a)
+
+
+def saliency(g):
+    """Spectral-residual saliency (Hou & Zhang 2007) of a gray frame: what stands out from its
+    surroundings (a bird on the sky, a figure on the sand), at the frame's own size."""
+    f = np.fft.fft2(g - g.mean())
+    log_amp = np.log(np.abs(f) + 1e-9)
+    resid = log_amp - blur(log_amp, 3)
+    s = np.abs(np.fft.ifft2(np.exp(resid + 1j * np.angle(f)))) ** 2
+    e = max(2, g.shape[1] // 80)  # the transform wraps around: the frame's own edges are not a subject
+    s[:e], s[-e:], s[:, :e], s[:, -e:] = 0, 0, 0, 0
+    return s / (s.max() + 1e-12)
+
+
+def peak_map(a, k):
+    """Blur a map, then scale it so its strongest blob is 1 and its typical level is 0."""
+    a = blur(a, k)
+    lo, hi = float(np.median(a)), float(a.max())
+    return np.clip((a - lo) / (hi - lo), 0, 1) if hi > lo else np.zeros_like(a)
+
+
+def track_subject(g):
+    """Follow the subject through a run of sampled gray frames: what moves against the camera's own
+    move (a walker, a car, a bird), else what stands out from its surroundings (spectral residual).
+
+    It starts on the strongest spot of the first second and then only looks near where the subject
+    was heading, so a wave or a cloud elsewhere in the frame does not pull it away. Returns, per
+    frame, x (0..1 of the width, smoothed over about a second) and how unique the followed spot is
+    (near 1: nothing else in the frame looks like it; 0 or below: busy scenery, nothing to follow)."""
+    n, h, w = g.shape
+    k = max(3, w // 24)
+    maps = []
+    for i in range(n):
+        a, b = g[max(0, i - 1)], g[min(n - 1, i + 1)]
+        m = aligned_motion(a, b) if n > 1 else np.zeros((h, w))
+        m = np.clip(m - np.median(m, axis=1, keepdims=True), 0, None)  # rows of water or grass change all over
+        sm = peak_map(saliency(g[i]), k)
+        if float(m.mean()) > 1e-3:  # a subject both moves and stands out; water and clouds only move
+            c = (peak_map(m, k) + 0.25) * (sm + 0.25)
+            maps.append(np.clip((c - 0.0625) / (c.max() - 0.0625 + 1e-9), 0, 1))
+        else:  # a still frame has no motion to follow
+            maps.append(sm)
+    # the frame's edges show what the camera move uncovers, not a subject; and subjects are usually
+    # framed toward the middle, so a mild preference for it breaks ties with busy scenery
+    e = w // 40
+    prior = 1 - 0.35 * ((np.arange(w) - w / 2) / (w / 2)) ** 2
+    for c in maps:
+        c[:e], c[-e:], c[:, :e], c[:, -e:] = 0, 0, 0, 0
+        c *= prior
+    start = np.mean(maps[:min(n, SAMPLE_FPS)], axis=0)
+    y, x = np.unravel_index(int(np.argmax(start)), start.shape)
+    gx, gy = w // 8, h // 4  # how far the subject can get between two samples
+    xs, unique = np.empty(n), np.zeros(n)
+    vx = 0.0
+    for i, c in enumerate(maps):
+        px = x + vx  # where it was heading
+        x0, x1 = int(max(0, px - gx)), int(min(w, px + gx + 1))
+        y0, y1 = int(max(0, y - gy)), int(min(h, y + gy + 1))
+        win = c[y0:y1, x0:x1]
+        yy, xx = np.unravel_index(int(np.argmax(win)), win.shape)
+        strength = float(win[yy, xx])
+        rest = c.copy()  # how unique the spot is: the best other place, away from it
+        rest[y0:y1, x0:x1] = 0
+        unique[i] = 1 - float(rest.max()) / max(strength, 1e-6)
+        if strength >= 0.3:  # else nothing there this frame: coast on
+            nx = x0 + xx
+            vx = 0.5 * vx + 0.5 * (nx - x) if i else 0.0
+            x, y = nx, y0 + yy
+        xs[i] = x
+    if n >= 5:  # a median first: one frame that jumps is ignored
+        pad = np.pad(xs, 2, mode="edge")
+        xs = np.array([np.median(pad[i:i + 5]) for i in range(n)])
+    return smooth((xs + 0.5) / w, 5), unique
+
+
+TRACK_W, TRACK_FPS = 640, 6  # the best window is tracked finer than the scan: a far bird is a few pixels
+MOVES = 0.75     # the subject travels this far (in transform.x units, 1 = half the canvas) to get a path
+UNIQUE = 0.3     # and stands out this clearly from everything else in the frame
+EDGE = 0.12      # a track that runs into the outer 12% of the frame is following the camera move's edge
+
+
+def simplify(pts, tol):
+    """Ramer-Douglas-Peucker: the fewest [t, x] points that stay within `tol` of the curve."""
+    if len(pts) <= 2:
+        return pts
+    (t0, x0), (t1, x1) = pts[0], pts[-1]
+    d = [abs(x - (x0 + (x1 - x0) * (t - t0) / ((t1 - t0) or 1))) for t, x in pts[1:-1]]
+    i = int(np.argmax(d)) + 1
+    if d[i - 1] <= tol:
+        return [pts[0], pts[-1]]
+    return simplify(pts[:i + 1], tol)[:-1] + simplify(pts[i:], tol)
+
+
+def reframe(path, t0, t1, iw, ih, cw, ch, fallback_cx=0.5):
+    """Crop offset(s) that keep the subject of a horizontal shot in a vertical "cover" crop.
+
+    Returns (reframe_x, reframe_path): the offset for the whole window, and when the subject
+    travels far enough to leave a fixed crop, [[source_seconds, x], ...] to follow it (else None).
+    x is transform.x: 1 = half the canvas, positive moves the picture right (shows its left side)."""
+    shown_w = ch * iw / ih  # canvas px when the height fills the canvas
+    if shown_w <= cw * 1.05:
+        return 0.0, None
+    limit = (shown_w - cw) / 2 / (cw / 2)
+    to_x = lambda cx: float(np.clip(-(cx - 0.5) * shown_w / (cw / 2), -limit, limit))
+    cx, unique, ok = None, None, False
+    if t1 - t0 >= 1.0:
+        fr = frames(path, TRACK_W, int(round(TRACK_W * ih / iw / 2)) * 2, fps=TRACK_FPS, start=t0, length=t1 - t0)
+        if len(fr) >= 4:
+            cx, unique = track_subject(np.stack([gray(f) for f in fr]))
+            ok = float(np.median(unique)) >= UNIQUE and EDGE <= float(cx.min()) and float(cx.max()) <= 1 - EDGE
+    if not ok:  # nothing clear to follow: frame the shot's overall activity
+        return round(to_x(fallback_cx), 3), None
+    xs = [to_x(v) for v in cx]
+    rx = round(float(np.median(xs)), 3)
+    if max(xs) - min(xs) < MOVES:
+        return rx, None
+    pts = [[round(t0 + i / TRACK_FPS, 2), x] for i, x in enumerate(xs)]
+    pts[-1][0] = round(min(pts[-1][0], t1), 2)
+    pts = simplify(pts, 0.08)
+    if len(pts) > 6:  # a handful of keyframes: keep the ones that bend the path most
+        pts = simplify(pts, 0.16)
+    return rx, [[t, round(x, 3)] for t, x in pts]
 
 
 def hex_of(rgb):
@@ -310,16 +460,13 @@ def main() -> int:
         sat = float(np.clip((t_sat - r["stats"]["saturation"]) * 1.2, 0, 0.25))
         r["adjust"] = {k: round(v, 2) for k, v in (("brightness", b), ("saturation", sat)) if abs(v) >= 0.06}
 
-    # reframe: a horizontal source on a vertical canvas with "fit": "cover"
+    # reframe: a horizontal source on a vertical canvas with "fit": "cover"; a subject that moves
+    # across the frame gets a path to follow it
     for r in rows:
-        iw, ih = r["info"]["width"] or W, r["info"]["height"] or H
-        shown_w = ch * iw / ih  # canvas px when the height fills the canvas
-        if shown_w <= cw * 1.05:
-            r["reframe_x"] = 0.0
-            continue
-        limit = (shown_w - cw) / 2 / (cw / 2)
-        x = -(r["center_x"] - 0.5) * shown_w / (cw / 2)
-        r["reframe_x"] = round(float(np.clip(x, -limit, limit)), 3)
+        t1 = r["best"]["out"] if r["duplicate_of"] is None else r["best"]["in"]  # a copy is not tracked
+        r["reframe_x"], r["reframe_path"] = reframe(
+            r["file"], r["best"]["in"], t1, r["info"]["width"] or W, r["info"]["height"] or H,
+            cw, ch, r["center_x"])
 
     ranked = [r for r in rows if r["duplicate_of"] is None]
 
@@ -357,7 +504,8 @@ def main() -> int:
     clean = lambda r: {"rank": None, "file": r["file"], "name": r["name"], "shot": r["shot"],
                        "in": r["t0"], "out": r["t1"], "score": r["score"], "reasons": r["reasons"],
                        "best": r["best"], "light": r["light"], "stats": r["stats"], "adjust": r["adjust"],
-                       "reframe_x": r["reframe_x"], "fps": r["info"]["fps"], "duplicate_of": r["duplicate_of"],
+                       "reframe_x": r["reframe_x"], **({"reframe_path": r["reframe_path"]} if r["reframe_path"] else {}),
+                       "fps": r["info"]["fps"], "duplicate_of": r["duplicate_of"],
                        "similar_to": r["similar_to"], "text_y": r["text_y"],
                        "orientation": "vertical" if r["info"]["height"] > r["info"]["width"] else "horizontal"}
     shots = [clean(r) for r in ranked]
@@ -369,7 +517,8 @@ def main() -> int:
                           "pace": "high" if energy > 0.03 else "low", "light": lights},
               "ranked": shots,
               "note": "Use shots with score >= 50, best window first. 'adjust' goes into the clip's \"adjust\"; "
-                      "'reframe_x' into transform.x with \"fit\": \"cover\" on a vertical canvas. Slow motion only "
+                      "'reframe_x' into transform.x with \"fit\": \"cover\" on a vertical canvas; when a shot has "
+                      "'reframe_path', put it in transform.x_path instead (the crop follows the subject). Slow motion only "
                       "on fps >= 50."}
     (out / "footage.json").write_text(json.dumps(report, indent=1, ensure_ascii=False), encoding="utf-8")
 

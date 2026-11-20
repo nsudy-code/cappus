@@ -215,7 +215,9 @@ busy backgrounds give rough edges, so name those shots as things to check at han
 
 - Horizontal footage on a vertical canvas: `"fit": "cover"` crops to the middle third. Check in the
   contact sheet where the subject is and shift with `transform.x` (positive = moves the frame right,
-  revealing more of the left side; values around -0.5..0.5 with cover on 16:9 footage).
+  revealing more of the left side; 16:9 footage covering 9:16 allows about -2.1..2.1, the sides).
+  A subject that crosses the frame (someone walking, a bird, a car passing) leaves a fixed crop:
+  follow it with `transform.x_path` (`scan_footage.py` gives it as `reframe_path`).
 - When the whole frame matters (landscapes, group shots, text in frame): `"fit": "contain"` +
   `"background": "blur"`.
 - Vertical footage on a horizontal canvas: `contain` + blur background, or two vertical clips side by

@@ -99,7 +99,8 @@ python <skill>/scripts/transcribe.py talk.mp4             # what is said, with a
 
 **Many clips?** Sort them first: `python <skill>/scripts/scan_footage.py <folder> --out <scratch_dir>/scan`
 splits them into shots, scores each (sharp, exposure, shake, motion), drops duplicates, and gives
-each shot its best window, a color correction (`adjust`) and a vertical crop offset (`reframe_x`).
+each shot its best window, a color correction (`adjust`) and a vertical crop offset (`reframe_x`,
+or a `reframe_path` for `transform.x_path` when the subject moves across the frame).
 Read its `best.jpg`, then follow "A pile of footage into one edit" in `references/recipes.md`.
 
 Actually open the contact sheets with the Read tool. Choosing in/out points from filenames and
@@ -282,7 +283,8 @@ The full guidance is in `references/editing-craft.md`. The rules that matter mos
   scene, time or energy. Stacking effects on every clip is the most common way to make an edit look cheap.
 - **Motion on stills and static shots.** A slow `push_in` or pan gives life; alternate directions.
 - **Reframe properly.** Horizontal footage in a vertical canvas: `"fit": "cover"` (crops the sides -
-  check the subject stays in frame, shift with `transform.x`) or `"fit": "contain"` with
+  check the subject stays in frame, shift with `transform.x`, or follow a moving one with
+  `transform.x_path`) or `"fit": "contain"` with
   `"background": "blur"`. Never leave accidental black bars.
 - **Text must be readable in half a second.** Short lines, heavy weight, stroke or shadow for contrast,
   on screen long enough to read twice, inside the platform safe zone.
