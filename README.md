@@ -16,6 +16,13 @@ resources your account can export.
 
 > Panduan berbahasa Indonesia: [docs/cara-pakai.md](docs/cara-pakai.md)
 
+### Video tutorial
+
+[![Video tutorial: one folder of 22 clips, from installing cappus to an editable CapCut reel](docs/video-tutorial.jpg)](https://youtu.be/Jne3_vhNHUs)
+
+*90 seconds on YouTube: one folder of 22 clips, from installing cappus to a finished, editable
+CapCut reel.*
+
 ## Contents
 
 - [How it works](#how-it-works)
@@ -335,6 +342,7 @@ skills/capcut-editor/
   requirements-captions.txt Optional speech-to-text dependency
 docs/cara-pakai.md          User guide in Indonesian
 docs/demo.gif               The animation at the top of this README
+docs/video-tutorial.jpg     Thumbnail for the video tutorial link
 examples/                   Demo specs and a synthetic media generator
 .claude-plugin/             Plugin and marketplace manifests
 ```
