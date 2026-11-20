@@ -80,8 +80,35 @@ def aliases() -> dict:
                     bucket = merged.setdefault(kind, {})
                     for alias, target in table.items():
                         bucket.setdefault(alias, target)
+        fonts = merged.setdefault("font", {})
+        for alias, info in curated_fonts().items():  # fonts.json: the curated fonts, with their aliases
+            fonts.setdefault(alias, info["name"])
         _aliases_cache = merged
     return _aliases_cache
+
+
+FONTS_FILE = _HERE / "fonts.json"
+_fonts_cache = None
+DEFAULT_FONT_WIDTH = 2.6  # canvas px per character per point of size, for fonts fonts.json does not list
+
+
+def curated_fonts() -> dict:
+    """alias -> {"name", "role", "moods", "width", "caps"?, "note"?} from fonts.json."""
+    global _fonts_cache
+    if _fonts_cache is None:
+        try:
+            _fonts_cache = json.loads(FONTS_FILE.read_text(encoding="utf-8")).get("fonts", {})
+        except (OSError, json.JSONDecodeError):
+            _fonts_cache = {}
+    return _fonts_cache
+
+
+def font_width(member) -> tuple:
+    """(width factor, caps-only) for a font catalog member; the default when it is not curated."""
+    for info in curated_fonts().values():
+        if info.get("name") == getattr(member, "name", None):
+            return float(info.get("width", DEFAULT_FONT_WIDTH)), bool(info.get("caps"))
+    return DEFAULT_FONT_WIDTH, False
 
 
 def unavailable(reload: bool = False) -> dict:

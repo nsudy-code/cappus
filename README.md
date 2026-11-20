@@ -186,6 +186,24 @@ already open, go back to the home screen or restart CapCut so it rescans its dra
 Media is **linked, not copied**. Do not move, rename or delete the source files, or CapCut will
 show them as offline.
 
+### Great results from a one-line request
+
+You do not have to describe the edit. cappus decides the structure, the look, the music and every
+timing so the first draft already looks designed:
+
+- **"Make a promo for my website lux.ai.id"**: Claude reads the site, keeps only what it says, and
+  makes a kinetic-typography promo (huge words on every beat) or a version with phone screenshots
+  of the site.
+- **"Turn these photos into a reel"**: cuts on the beat, motion on every photo, a few strong lines.
+- **Looks**: seven tested styles (`kinetic`, `bold_promo`, `clean_tech`, `cinematic`, `playful`,
+  `luxury`, `street`), each a font pairing, colors, text animation and music mood. Your brand color
+  is used automatically.
+- **Fonts**: 50 free CapCut fonts picked by looking at all of them, sized to fill the frame.
+- **Music**: no track? cappus generates one that is free to use, on an exact beat grid, so every cut
+  and word lands on the beat. Swap in a CapCut library song with the same BPM later if you like.
+- **Checked before you see it**: with computer use on, Claude opens the draft in CapCut and looks
+  at it before handing it over.
+
 ### Captions
 
 For footage with speech, Claude transcribes it offline and writes the captions into the draft as
@@ -251,6 +269,9 @@ JSON and has `--help`.
 | `inspect_draft.py` | Read an existing draft, including your manual edits in CapCut |
 | `tier.py` | Show or set your CapCut plan (free or Pro) |
 | `doctor.py` | Check the setup: Python, packages, ffmpeg, CapCut desktop and its drafts folder |
+| `looks.py` | List the looks (font pairing, colors, motion, music) or show one |
+| `music.py` | Generate a free music bed with an exact beat map |
+| `site_capture.py` | Screenshot a website on a phone and extract its text, prices, contacts and colors (needs Playwright) |
 | `check_resources.py` | Find catalog items CapCut can no longer load |
 
 Try the bundled demo:
@@ -297,6 +318,11 @@ skills/capcut-editor/
     inspect_draft.py        Read existing drafts
     tier.py                 Free or Pro setting
     doctor.py               Setup check
+    looks.py, looks.json    Tested looks
+    fonts.json              50 curated free fonts with roles, moods and widths
+    motion.py               Eased enter/exit presets (pop, slam, whip, zoom_through, ...)
+    music.py                Generated music with a beat map
+    site_capture.py         Website capture for promos
     check_resources.py      Detect resources CapCut no longer loads
     aliases.json            ~490 curated free resources with English aliases
     aliases_pro.json        ~390 curated Pro resources with English aliases
