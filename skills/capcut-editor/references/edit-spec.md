@@ -11,6 +11,7 @@ One JSON object. All times are **seconds**. Unknown keys are rejected (typos get
 - [video - main track clips](#video---main-track-clips)
 - [overlays - picture-in-picture, B-roll, layers](#overlays)
 - [audio](#audio)
+- [sfx - sound effects](#sfx---sound-effects)
 - [texts and styles](#texts-and-styles)
 - [captions](#captions)
 - [effects and filters on their own tracks](#effects-and-filters-on-their-own-tracks)
@@ -30,7 +31,7 @@ One JSON object. All times are **seconds**. Unknown keys are rejected (typos get
 | `brand` | look's colors | `{"accent": "#F59E0B", "text": "#FFFFFF", "muted": "#94A3B8"}`: the brand colors the look's styles use. Only with `look`. |
 | `styles` | {} | Named text styles, reused via `"style": "<name>"`. |
 | `video` | required | Main-track clips, in playback order. |
-| `overlays`, `audio`, `texts`, `captions`, `effects`, `filters`, `stickers` | [] | See below. |
+| `overlays`, `audio`, `sfx`, `texts`, `captions`, `effects`, `filters`, `stickers` | [] | See below. |
 
 ## Time values and references
 
@@ -83,7 +84,8 @@ Vertical-video safe zone (platform UI covers the rest): keep text within `y` fro
 | `keyframes` | `{"scale": [[0, 1.0], [2.0, 1.2]], "x": [[0, 0], [-0.01, 0.1]]}`. Time is seconds from the clip's start; **negative = from its end**. Properties: `x`, `y`, `scale`, `scale_x`, `scale_y`, `rotation`, `opacity`, `saturation`, `contrast`, `brightness` (last three: -1..1, 0 = unchanged), `volume`. Linear interpolation. Not with `motion` on the same property. |
 | `intro`, `outro` | Clip In/Out animation: `"fade_in"` or `{"name": "zoom_in", "duration": 0.4}` (kinds `video_intro`, `video_outro`). |
 | `combo` | Whole-clip Combo animation (kind `video_combo`). Cannot be combined with intro/outro. |
-| `transition` | Joins this clip to the **next** one (kind `transition`). Not allowed on the last clip. Duration is capped at half the shorter neighbour. |
+| `transition` | Joins this clip to the **next** one (kind `transition`). Not allowed on the last clip. Duration is capped at half the shorter neighbour. Takes `"sfx"` too: `{"name": "whip_pan", "sfx": "whoosh"}` puts the sound on the cut ([sfx](#sfx---sound-effects)). |
+| `sfx` | A sound on the cut into this clip (its start): `"hit"` or `{"sound": "hit", "gain": 2}`. Also on overlays (their start). |
 | `filter` | `"teal_orange"` or `{"name": ..., "intensity": 0-100}` - applies to this clip only. |
 | `effects` | List of `"name"` or `{"name", "params"}` - scene or body effects on this clip only. |
 | `mask` | `{"type": "circle", "x": 0, "y": 0, "size": 0.5, "feather": 10, "rotation": 0, "invert": false}`. Types: `linear`, `mirror`, `circle`, `rectangle`, `heart`, `star`. `x`,`y` in -1..1 of the clip; `size` = fraction of clip height. Rectangle also takes `width` (fraction of clip width) and `round` (0-100). |
@@ -191,7 +193,39 @@ light-leak/dust footage with `"blend": "screen"`, logo PNG in a corner.
 | `duck` | Lowers volume to `to` x volume during each timeline range (with `ramp` s slopes) via volume keyframes. |
 | `keyframes` | `{"volume": [[t, v], ...]}` - manual automation, t from the item's start. |
 | `effects` | Voice/scene effects (kinds `audio_effect`, `voice_effect`), e.g. `"echo"`, `"lofi"`, `"megaphone"`. |
-| `speed`, `track` | Playback rate; track name (default `"audio"`, use e.g. `"music"`, `"vo"`, `"sfx"`). |
+| `speed`, `track` | Playback rate; track name (default `"audio"`, use e.g. `"music"`, `"vo"`). A voice-over goes on a track named `vo...` or `voice...` so it does not count as music for the [sfx](#sfx---sound-effects) level. |
+
+## sfx - sound effects
+
+Generated sounds (or the user's own files), each placed so its **peak lands one frame after the
+picture it belongs to**: a whoosh's swell on the cut, a pop on the frame the text appears, a riser's
+top on the hit. Three ways to add one:
+
+```json
+"video": [{"src": "a.mp4", "transition": {"name": "whip_pan", "sfx": "whoosh"}}, ...],
+"texts": [{"text": "SALE", "at": 2.0, "duration": 1.5, "sfx": "pop"}],
+"sfx": [{"sound": "riser", "at": "@reveal"}, {"sound": "hit", "at": "@reveal", "gain": 2},
+        {"src": "media/door.wav", "peak": 0.42, "at": 7.5}]
+```
+
+`"sfx"` on a transition goes on the cut (the middle of the transition), on a clip or overlay at its
+start, on a text at its `at` (once, not again for each `echo` copy). The top-level list needs `at`
+and can point anywhere.
+
+| key | meaning |
+|---|---|
+| `sound` | A generated sound: `whoosh` (3 takes), `pop` (2), `tick` (2), `hit` (2), `riser` (1, 2 s, peaks at its end). |
+| `src`, `peak` | Instead of `sound`: the user's own file and the seconds into it where it should land (default 0). |
+| `at` | Top-level list only: the picture time. The sound's peak plays one frame later. |
+| `take` | 1-based take. Default: repeats of a sound rotate through its takes in time order, so two whooshes in a row differ. |
+| `volume` | Absolute gain. Default: the loudest music playing at that moment +3 dB (1.41 with no music). Audio on tracks named `sfx...`, `vo...` or `voice...` is not counted as music; `duck` is not taken into account. Capped at 4 (+12 dB). |
+| `gain` | dB on top of that, -40..20. `-3` for a softer whoosh on a gentle dissolve, `+2` for the one hit that matters. |
+| `track`, `id` | Track name (default `"sfx"`, more lanes are added as sounds overlap); `id` for references (top-level list only). |
+
+A sound whose lead-in would start before 0 starts at 0 with the lead-in cut off; one whose tail runs
+past the end of the main track is trimmed there. The kit is generated by `scripts/sfx.py` into
+`~/.cappus/sfx` on first use (well under a second) and is free to use anywhere. Like all media it is
+linked, not copied, into the draft.
 
 ## texts and styles
 

@@ -208,8 +208,17 @@ busy backgrounds give rough edges, so name those shots as things to check at han
 - Always fade music: in 0.1-0.5 s (or start on a downbeat with no fade), out 0.8-2 s.
 - Start the song where it is good; the intro of most songs is too slow for short-form.
 - Mute or lower (0.2-0.4) natural sound on B-roll unless it adds something (waves, crowd cheer).
-- Sound effects (whoosh on transitions, pop on text) only if the user provides files; CapCut's sound
-  library is not in the catalog - suggest adding them in CapCut instead.
+- Sound effects make cuts and text feel deliberate. Use the generated kit (`"sfx"`, see
+  `edit-spec.md`) or the user's files; CapCut's own sound library is not in the catalog. Each sound
+  lands with its peak one frame after its picture and a few dB over the music.
+  - `whoosh` on a transition that moves (whip, slide, zoom, glitch), not on a dissolve or every hard
+    cut. `pop` when a title or label appears, `tick` for counters, list items and small UI changes,
+    `hit` on the one slam or drop that matters, `riser` (2 s) into a reveal, ending on a `hit`.
+  - Restraint, as with transitions: three to six sounds in a 30 s reel. A sound on every cut and every
+    word is as cheap as an effect on every clip. Not under talking-head speech except at its edges.
+  - With `music.py`, put hits on the `drop` and `end_hit` times and risers into them; the track
+    already has its own risers and booms there, so `gain: -4` keeps them from doubling up.
+  - Leave the level to the default; adjust a single sound with `gain` in dB.
 
 ## Reframing between aspect ratios
 

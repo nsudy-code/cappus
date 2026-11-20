@@ -89,7 +89,7 @@ text animations, word-level captions, stickers and fancy text by raw id.
 | Auto reframe | Select clip > Auto reframe. |
 | Eased keyframes | Click a keyframe > graph/ease presets. (The spec only produces linear keyframes.) |
 | Color grading wheels / HSL / curves / LUT | Select clip > Adjust. (The spec can only set saturation/contrast/brightness via keyframes.) |
-| Sound effects, CapCut music library | Audio > Sound effects / Music. |
+| CapCut's sound-effect and music library (the spec's `sfx` has its own generated kit) | Audio > Sound effects / Music. |
 | Stickers from the library | Stickers panel (or harvest ids, see below). |
 | Text templates | Text > Text templates. |
 | Noise reduction, voice enhance | Select audio > Reduce noise / Enhance voice. |

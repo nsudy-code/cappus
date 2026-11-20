@@ -143,6 +143,12 @@ menyalinnya. Kalau file dipindah atau diganti namanya setelah draft dibuat, CapC
 Musik harus berupa file milik Anda (MP3, WAV, dan sebagainya). Claude tidak bisa mengambil lagu dari
 library musik CapCut. Lagu dari library bisa Anda tambahkan sendiri di CapCut setelahnya.
 
+Sound effect tidak perlu disiapkan. Claude membuat sendiri whoosh (untuk transisi), pop (teks
+muncul), tick, hit (hentakan) dan riser, gratis dipakai di mana saja. Setiap suara jatuh tepat di
+frame transisi atau teksnya, sedikit lebih keras dari musik, dan ada di track `sfx` sehingga mudah
+digeser, diganti atau dihapus di CapCut. Minta "tanpa sound effect" kalau tidak mau, atau beri file
+Anda sendiri.
+
 ### Tulis permintaan
 
 Tulis seperti memberi arahan ke editor manusia. Yang paling membantu:
@@ -274,7 +280,7 @@ menu di bawah mengikuti CapCut berbahasa Inggris.
 | Auto reframe | Pilih klip > Auto reframe. |
 | Keyframe dengan easing | Klik keyframe > pilih kurva. Draft hanya membuat keyframe linear. |
 | Color wheel, HSL, curves, LUT | Pilih klip > Adjust. |
-| Sound effect dan musik dari library CapCut | Audio > Sound effects / Music. |
+| Sound effect dan musik dari library CapCut (cappus membuat sendiri whoosh, pop, tick, hit dan riser) | Audio > Sound effects / Music. |
 | Stiker dan text template dari library | Panel Stickers / Text templates. Atau tambahkan sekali secara manual ke draft mana saja, lalu minta Claude memakainya; Claude bisa membaca ID-nya dari draft itu. |
 | Peredam noise, perjelas suara | Pilih audio > Reduce noise / Enhance voice. |
 | Ekspor | Tombol Export di kanan atas. |

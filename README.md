@@ -211,6 +211,8 @@ timing so the first draft already looks designed:
 - **Fonts**: 50 free CapCut fonts picked by looking at all of them, sized to fill the frame.
 - **Music**: no track? cappus generates one that is free to use, on an exact beat grid, so every cut
   and word lands on the beat. Swap in a CapCut library song with the same BPM later if you like.
+- **Sound effects**: generated whooshes, pops, ticks, hits and risers, free to use, each landing on
+  the frame its cut or title appears, a little louder than the music. Repeats use different takes.
 - **Checked before you see it**: with computer use on, Claude opens the draft in CapCut and looks
   at it before handing it over.
 
@@ -250,7 +252,7 @@ Some features cannot be written into a draft. Each takes one or two clicks in Ca
 | Remove the background by brush | Select the clip > Video > Remove BG > Custom removal (with Pro, Claude can turn on Auto removal in the draft itself) |
 | Eased keyframes | Click a keyframe and choose an easing preset (drafts use linear keyframes) |
 | Color wheels, HSL, curves, LUTs | Select the clip > Adjust |
-| Sound effects and CapCut's music library | Audio > Sound effects / Music |
+| CapCut's own sound-effect and music library (cappus makes its own whoosh, pop, tick, hit and riser) | Audio > Sound effects / Music |
 | Export | Export button, top right |
 
 ## Troubleshooting
@@ -281,6 +283,7 @@ JSON and has `--help`.
 | `doctor.py` | Check the setup: Python, packages, ffmpeg, CapCut desktop and its drafts folder |
 | `looks.py` | List the looks (font pairing, colors, motion, music) or show one |
 | `music.py` | Generate a free music bed with an exact beat map |
+| `sfx.py` | Generate the free sound-effect kit (whoosh, pop, tick, hit, riser) with each peak time |
 | `scan_footage.py` | Sort a folder of footage: shots, quality scores, duplicates, best windows, color matching, reframing |
 | `site_capture.py` | Screenshot a website on a phone and extract its text, prices, contacts and colors (needs Playwright) |
 | `check_resources.py` | Find catalog items CapCut can no longer load |
@@ -300,7 +303,8 @@ python skills/capcut-editor/scripts/build_draft.py examples/demo.json --overwrit
 ```
 
 Then open the `cappus-demo` draft in CapCut. `examples/demo-pro.json` shows Pro resources and needs
-`--allow-pro` or a Pro setting.
+`--allow-pro` or a Pro setting. `examples/demo-sfx.json` adds generated sound effects: whooshes on the
+transitions, pops on the titles, a riser into a hit on the end card.
 
 ## Updating
 
@@ -333,6 +337,7 @@ skills/capcut-editor/
     fonts.json              50 curated free fonts with roles, moods and widths
     motion.py               Eased enter/exit presets (pop, slam, whip, zoom_through, ...)
     music.py                Generated music with a beat map
+    sfx.py                  Generated sound effects with their peak times
     site_capture.py         Website capture for promos
     check_resources.py      Detect resources CapCut no longer loads
     aliases.json            ~490 curated free resources with English aliases
