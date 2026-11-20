@@ -31,6 +31,7 @@ from _common import (BACKUPS_KEPT, BUILD_FILE, MARKER, TIMELINE_ID, SpecError, b
                      find_drafts_dir, label, param_names, resolve, signature_hash, timeline_signature, user_tier)
 
 import contrast
+import easing
 import looks as looks_mod
 import motion
 from _common import font_width
@@ -71,7 +72,7 @@ FX_KEYS = {"name", "at", "end", "duration", "params", "track", "note"}
 FILTER_KEYS = {"name", "at", "end", "duration", "intensity", "track", "note"}
 STICKER_KEYS = {"resource_id", "at", "end", "duration", "transform", "track", "keyframes", "note"}
 TOP_KEYS = {"name", "width", "height", "fps", "allow_pro", "look", "brand", "fonts", "styles", "video", "overlays", "audio",
-            "texts", "captions", "effects", "filters", "stickers", "note"}
+            "texts", "captions", "effects", "filters", "stickers", "linear_keyframes", "note"}
 LIST_KEYS = ("video", "overlays", "audio", "texts", "effects", "filters", "stickers")
 
 KF_PROPS = {
@@ -172,16 +173,17 @@ def as_list(value, ctx) -> list:
     raise SpecError(f"{ctx} must be a list, got {type(value).__name__}")
 
 
-def points(value, ctx, minimum=2) -> list:
-    """Keyframe points: [[seconds, value], ...]."""
+def points(value, ctx, minimum=2, ease=False) -> list:
+    """Keyframe points: [[seconds, value], ...], or [seconds, value, ease] when ease is allowed."""
     if not isinstance(value, list):
         raise SpecError(f"{ctx} must be a list of [time, value] points, e.g. [[0, 1.0], [2.5, 0.3]], "
                         f"got {type(value).__name__}")
     if len(value) < minimum:
         raise SpecError(f"{ctx}: need at least {minimum} [time, value] point(s), e.g. [[0, 1.0], [2.5, 0.3]]")
     for pt in value:
-        if not (isinstance(pt, (list, tuple)) and len(pt) == 2):
-            raise SpecError(f"{ctx}: each point is [seconds_from_item_start, value], got {pt!r}")
+        if not (isinstance(pt, (list, tuple)) and (len(pt) == 2 or (ease and len(pt) == 3))):
+            shape = "[seconds_from_item_start, value] or [seconds, value, ease]" if ease else                 "[seconds_from_item_start, value]"
+            raise SpecError(f"{ctx}: each point is {shape}, got {pt!r}")
     return value
 
 
@@ -237,6 +239,11 @@ class Builder:
             self.warnings.append(f"spec.fps {fps:g} is not a CapCut project rate; using {self.fps} "
                                  f"(CapCut offers {', '.join(map(str, FPS_RATES))})")
         self.script = ScriptFile(self.width, self.height, self.fps)
+        easing.install()
+        # Eased keyframes (CapCut bezier curves); "linear_keyframes": true samples them into linear points.
+        self.linear_keyframes = bool(spec.get("linear_keyframes", False))
+        self.graphs = easing.Graphs()
+        self.script.content["keyframe_graph_list"] = self.graphs.items
         self.pro_used: list = []
         self.used: dict = {}
         self.clips: dict = {}       # id -> (start_us, end_us)
@@ -293,7 +300,7 @@ class Builder:
             else:
                 pts, window = motion.exit_points(name, d, dur, rest, kind), (dur - d, dur)
             for prop, added in pts.items():
-                base = [[float(t) + dur if float(t) < 0 else float(t), v] for t, v in kf.get(prop, [])]
+                base = [[float(p[0]) + dur if float(p[0]) < 0 else float(p[0]), *p[1:]] for p in kf.get(prop, [])]
                 kf[prop] = motion.merge(sorted(base), added, window, build)
         return kf
 
@@ -686,19 +693,45 @@ class Builder:
         if not isinstance(kf, dict):
             raise SpecError(f"{ctx}.keyframes must be an object like {{\"scale\": [[0, 1.0], [2.5, 1.15]]}}")
         dur = seg.duration
+        default = kf.get("ease")
+        try:
+            easing.parse(default, f"{ctx}.keyframes.ease")
+        except easing.EaseError as e:
+            raise SpecError(str(e))
         for prop, pts in kf.items():
+            if prop == "ease":
+                continue
             if prop not in KF_PROPS or (allowed and prop not in allowed):
                 raise SpecError(f"{ctx}.keyframes: unsupported property '{prop}'. Allowed: {sorted(allowed or KF_PROPS)}")
             lo, hi, above = KF_RANGES.get(prop, (None, None, None))
-            for pt in points(pts, f"{ctx}.keyframes.{prop}"):
-                off = us(num(pt[0], f"{ctx}.keyframes.{prop} time"))
+            pc = f"{ctx}.keyframes.{prop}"
+            placed = []  # [seconds, value, ease] after clamping, in the order given
+            for pt in points(pts, pc, ease=True):
+                off = us(num(pt[0], f"{pc} time"))
                 if off < 0:
                     off += dur  # negative = measured back from the clip end
                 off = max(0, min(dur, off))
-                val = num(pt[1], f"{ctx}.keyframes.{prop} value", lo=lo, hi=hi, above=above)
+                val = num(pt[1], f"{pc} value", lo=lo, hi=hi, above=above)
                 if prop in ("scale", "scale_x", "scale_y"):
                     val *= base
+                ease = pt[2] if len(pt) == 3 else default
+                try:
+                    easing.parse(ease, f"{pc} ease at {pt[0]}s")
+                except easing.EaseError as e:
+                    raise SpecError(str(e))
+                placed.append([off, val, ease])
+            placed.sort(key=lambda p: p[0])
+            if self.linear_keyframes:
+                placed = [[round(t), v] for t, v in easing.sample(placed)]
+            for off, val, *_ in placed:
                 seg.add_keyframe(KF_PROPS[prop], off, val)
+            eases = {p[0]: easing.parse(p[2], pc) for p in placed if len(p) > 2 and p[2] not in (None, "linear")}
+            if eases:
+                prop_kf = KF_PROPS[prop]
+                if prop_kf == cc.KeyframeProperty.uniform_scale:
+                    prop_kf = cc.KeyframeProperty.scale_x  # pycapcut keeps uniform scale on the scale_x list
+                kf_list = next(k for k in seg.common_keyframes if k.keyframe_property == prop_kf)
+                easing.apply(kf_list, eases, self.graphs)
 
     def motion_keyframes(self, motion, dur, ctx) -> dict:
         m = motion if isinstance(motion, dict) else {"type": motion}

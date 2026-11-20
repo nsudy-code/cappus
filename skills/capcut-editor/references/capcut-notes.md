@@ -72,11 +72,20 @@ file times, so a draft the user only opened in CapCut also reads as edited (`edi
 ## What the generated draft can do
 
 Cuts, trims, order, constant speed, volume, audio fades, multiple video/audio/text layers,
-transform (position/scale/rotation/opacity/flip), linear keyframes (position, scale, rotation,
-opacity, saturation, contrast, brightness, volume), In/Out/Combo animations for clips and text,
+transform (position/scale/rotation/opacity/flip), keyframes (position, scale, rotation,
+opacity, saturation, contrast, brightness, volume) with CapCut ease curves (presets or a custom
+bezier; volume stays linear), In/Out/Combo animations for clips and text,
 transitions, per-clip and track-level filters, scene and body effects with slider values, masks,
 blend modes, chroma key, background removal (Auto removal, Pro), background blur/color fill, text with font/color/stroke/shadow/background,
 text animations, word-level captions, stickers and fancy text by raw id.
+
+How eased keyframes are stored (read from drafts CapCut 9.8 saved; `scripts/easing.py`): a segment
+from keyframe A to B is a cubic bezier, A's `right_control` = (x1 * duration_us, y1 * value_change)
+and B's `left_control` = ((x2 - 1) * duration_us, (y2 - 1) * value_change), both keyframes
+`"curveType": "FreeCurveInOut"`. A CapCut preset also links B's `graphID` to an entry of the
+top-level `keyframe_graph_list` (preset `resource_id` and name), which is what ticks the preset in
+CapCut's keyframe menu. Checked in CapCut 9.8: a draft written this way opens, plays the curves
+(scale values at the playhead match the bezier) and shows the presets on the keyframes.
 
 ## What it cannot do - tell the user the one-click CapCut way
 
@@ -87,7 +96,7 @@ text animations, word-level captions, stickers and fancy text by raw id.
 | Background removal by brush | Select clip > Video > Remove BG > Custom removal. (Auto removal is `remove_bg` in the spec, Pro only.) |
 | Freeze frame, reverse | Right-click clip > Freeze / Reverse. |
 | Auto reframe | Select clip > Auto reframe. |
-| Eased keyframes | Click a keyframe > graph/ease presets. (The spec only produces linear keyframes.) |
+| A keyframe curve that is more than one bezier per segment | CapCut's keyframe graph. The spec's `ease` writes one bezier per segment: a CapCut preset (right-click a keyframe > Show all presets) or a custom curve. |
 | Color grading wheels / HSL / curves / LUT | Select clip > Adjust. (The spec can only set saturation/contrast/brightness via keyframes.) |
 | Sound effects, CapCut music library | Audio > Sound effects / Music. |
 | Stickers from the library | Stickers panel (or harvest ids, see below). |

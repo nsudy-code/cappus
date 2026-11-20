@@ -248,7 +248,6 @@ Some features cannot be written into a draft. Each takes one or two clicks in Ca
 | Speed ramp (curve speed) | Select the clip > Speed > Curve |
 | Auto captions without installing faster-whisper | Text > Auto captions (with faster-whisper, Claude adds the captions itself; see [Captions](#captions)) |
 | Remove the background by brush | Select the clip > Video > Remove BG > Custom removal (with Pro, Claude can turn on Auto removal in the draft itself) |
-| Eased keyframes | Click a keyframe and choose an easing preset (drafts use linear keyframes) |
 | Color wheels, HSL, curves, LUTs | Select the clip > Adjust |
 | Sound effects and CapCut's music library | Audio > Sound effects / Music |
 | Export | Export button, top right |

@@ -97,7 +97,7 @@ def test_every_enter_preset_ends_at_rest(name):
     pts = motion.enter_points(name, 0.4, REST, "overlay", width=0.5)
     for prop, points in pts.items():
         assert points[0][0] == 0 and 0 < points[-1][0] <= 0.4 + 1e-9  # fades may finish early
-        times = [t for t, _ in points]
+        times = [p[0] for p in points]
         assert times == sorted(times)
         rest = {"scale": REST["scale"], "scale_x": REST["scale"], "x": REST["x"], "y": REST["y"],
                 "opacity": REST["opacity"], "rotation": 0.0}[prop]
@@ -116,7 +116,7 @@ def test_every_exit_preset_starts_at_rest(name):
 def test_grow_left_keeps_the_left_edge_still():
     w = 0.6
     pts = motion.enter_points("grow_left", 0.45, REST, "overlay", width=w)
-    for (_, sx), (_, x) in zip(pts["scale_x"], pts["x"]):
+    for (_, sx, *_e), (_, x, *_f) in zip(pts["scale_x"], pts["x"]):
         shown = w * sx / REST["scale"]
         assert x - shown / 2 == pytest.approx(REST["x"] - w / 2, abs=1e-4)
 
@@ -126,7 +126,7 @@ def test_enter_merges_into_a_drift_without_a_jump():
     pop = motion.enter_points("pop", 0.35, REST, "overlay")["scale"]
     merged = motion.merge(drift, pop, (0, 0.35), "enter")
     assert merged[-1] == [4.0, 0.728]
-    at_end = [v for t, v in merged if t == pytest.approx(0.35)][0]
+    at_end = [p[1] for p in merged if p[0] == pytest.approx(0.35)][0]
     assert at_end == pytest.approx(motion.value_at(drift, 0.35), abs=1e-4)
 
 
