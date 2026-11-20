@@ -69,7 +69,7 @@ _PUNCT = re.compile(r"(?<!\d)[.,!?;:…。，、！？]+|[.,!?;:…]+(?!\d)")
 FX_KEYS = {"name", "at", "end", "duration", "params", "track", "note"}
 FILTER_KEYS = {"name", "at", "end", "duration", "intensity", "track", "note"}
 STICKER_KEYS = {"resource_id", "at", "end", "duration", "transform", "track", "keyframes", "note"}
-TOP_KEYS = {"name", "width", "height", "fps", "allow_pro", "look", "brand", "styles", "video", "overlays", "audio",
+TOP_KEYS = {"name", "width", "height", "fps", "allow_pro", "look", "brand", "fonts", "styles", "video", "overlays", "audio",
             "texts", "captions", "effects", "filters", "stickers", "note"}
 LIST_KEYS = ("video", "overlays", "audio", "texts", "effects", "filters", "stickers")
 
@@ -253,14 +253,15 @@ class Builder:
     def resolve_styles(spec) -> dict:
         """The look's styles (if the spec names a look), overridden key by key by spec.styles."""
         own = spec.get("styles") or {}
-        if "brand" in spec and not spec.get("look"):
-            raise SpecError("spec.brand only applies together with spec.look")
+        for key in ("brand", "fonts"):
+            if key in spec and not spec.get("look"):
+                raise SpecError(f"spec.{key} only applies together with spec.look")
         if not spec.get("look"):
             return own
         if not isinstance(spec["look"], str):
             raise SpecError("spec.look must be the name of a look (run looks.py to list them)")
         try:
-            merged = looks_mod.styles(spec["look"], spec.get("brand"))
+            merged = looks_mod.styles(spec["look"], spec.get("brand"), spec.get("fonts"))
         except looks_mod.LookError as e:
             raise SpecError(str(e))
         for name, st in own.items():

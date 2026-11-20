@@ -134,7 +134,15 @@ Read `references/recipes.md` when the request matches one (a website promo, phot
 reel), and `references/editing-craft.md` for everything else - it has the pacing rules, the
 per-genre recipes and the "which effect for which mood" palette.
 
-**Start from a look.** `python <skill>/scripts/looks.py` lists six tested looks (font pairing,
+**Let the footage and the theme choose the look, and never the same one twice in a row.** Run
+`python <skill>/scripts/looks.py suggest --theme "<the user's words>" [--scan scan/footage.json]
+[--site site/site.json] [--accent "#RRGGBB"] --record` once per new edit. It reads the theme (both
+English and Indonesian words), the footage's pace, light and own accent color, and the user's last
+edits, and returns the `look`, a tested font pairing (`fonts`), the `brand` accent, the music mood
+and BPM, and why. Put its `spec` part into the spec as it is, and say the choice in one line. Use
+one of its `alternatives` when the user asks for something different.
+
+**Looks.** `python <skill>/scripts/looks.py` lists the tested looks (font pairing,
 colors, text styles with motion, card motion, transitions, music mood and BPM); `looks.py <name>`
 shows one. Put `"look": "<name>"` and `"brand": {"accent": "#RRGGBB"}` in the spec and use the
 styles `title`, `accent`, `big`, `label` (captions get `caption`). Other fonts: `scripts/fonts.json`

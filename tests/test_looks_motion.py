@@ -346,3 +346,58 @@ def test_adjust_conflicts_with_keyframes_on_the_same_property(tmp_path, media):
     res = check(tmp_path, {"video": [{"src": str(media / "landscape.mp4"), "duration": 2, "adjust": {"brightness": 0.1},
                                       "keyframes": {"brightness": [[0, 0], [1, 0.2]]}}]})
     assert res.returncode == 1 and "adjust and keyframes both set 'brightness'" in res.stderr, res.stderr
+
+
+# ---------- suggest: fit the theme and the footage, and differ from the last edits ----------
+
+@pytest.mark.parametrize("theme, look", [
+    ("bikin video promo website saya", "kinetic"),
+    ("promo villa mewah", "luxury"),
+    ("flash sale produk baru", "bold_promo"),
+    ("jualan kopi di cafe", "playful"),
+    ("liburan ke pantai", "cinematic"),
+])
+def test_suggest_matches_the_theme(theme, look):
+    assert looks.suggest(theme, seed=1)["spec"]["look"] == look
+
+
+def test_suggest_with_footage_and_no_theme_starts_from_cinematic():
+    scan = {"palette": {"accent": "#61CCFF", "pace": "low", "light": {"day": 5}}}
+    choice = looks.suggest("", scan=scan, seed=1)
+    assert choice["spec"]["look"] == "cinematic" and choice["spec"]["brand"] == {"accent": "#61CCFF"}
+
+
+def test_brand_accent_wins_over_the_footage():
+    scan = {"palette": {"accent": "#61CCFF", "pace": "low", "light": {"day": 5}}}
+    assert looks.suggest("liburan", scan=scan, brand_accent="#F59E0B", seed=1)["spec"]["brand"]["accent"] == "#F59E0B"
+
+
+def test_suggest_never_repeats_the_last_two_edits(cappus_home):
+    seen = []
+    for _ in range(6):
+        choice = looks.suggest("liburan ke pantai", seed=None, history=looks.load_history())
+        looks.record(choice)
+        seen.append(choice["spec"]["fonts"]["headline"])
+    for a, b, c in zip(seen, seen[1:], seen[2:]):
+        assert c not in (a, b), seen
+    assert len(set(seen)) >= 3
+
+
+def test_spec_fonts_swap_the_pairing_and_scale_sizes(tmp_path, media):
+    spec = {"look": "cinematic", "fonts": {"headline": "sequel_wide", "body": "dm_sans_italic"}, "video": clip(media),
+            "texts": [{"text": "SUMMER", "at": 0, "duration": 1, "style": "title"}]}
+    rows = texts_in_draft(tmp_path, spec)
+    base = looks.looks()["cinematic"]["styles"]["title"]["size"]
+    ratio = _common.curated_fonts()["anton"]["width"] / _common.curated_fonts()["sequel_wide"]["width"]
+    assert rows[0]["size"] == pytest.approx(base * max(0.4, min(1.5, ratio)), abs=0.2)  # the ratio is capped
+
+
+def test_spec_fonts_must_be_curated(tmp_path, media):
+    res = check(tmp_path, {"look": "cinematic", "fonts": {"headline": "comic_sans"}, "video": clip(media)})
+    assert res.returncode == 1 and "not in fonts.json" in res.stderr, res.stderr
+
+
+def test_every_pairing_uses_curated_fonts():
+    for name, lk in looks.looks().items():
+        for pr in lk.get("pairings", []):
+            assert pr["headline"] in _common.curated_fonts() and pr["body"] in _common.curated_fonts(), (name, pr)

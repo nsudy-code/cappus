@@ -15,8 +15,10 @@ draft already looks designed. State the choices you made in one line; do not ask
 
 ## Always: look, music, motion
 
-1. **Pick one look** (`python <skill>/scripts/looks.py` lists them). Match it to the business, not
-   to a guess about taste:
+1. **Let `looks.py suggest` pick the look** (`--theme` with the user's words, `--scan` / `--site`
+   when there is footage or a site, `--record`). It matches the business and the footage, takes the
+   accent color from the brand, the site or the footage, and rotates between tested font pairings so
+   two edits in a row never look alike. The table below is what it is based on:
 
    | the business | look |
    |---|---|
@@ -27,8 +29,8 @@ draft already looks designed. State the choices you made in one line; do not ask
    | fashion, jewelry, beauty clinics, salons, premium services | `luxury` |
    | sport, streetwear, gaming, cars, music | `street` |
 
-   In the spec: `"look": "clean_tech", "brand": {"accent": "#F59E0B"}` with the brand's own accent
-   color (from `site_capture.py`, a logo, or what the user says). Texts then use
+   In the spec: the `spec` part of the suggestion, for example `"look": "cinematic", "fonts":
+   {"headline": "bebas", "body": "kilig"}, "brand": {"accent": "#61CCFF"}`. Texts then use
    `"style": "title" | "accent" | "big" | "label"`, and captions get the look's caption style.
 2. **Music on a known grid.** Use the user's track when they give one (and `probe.py --beats`). With
    none, generate one: `python <skill>/scripts/music.py media/music.wav --mood <look's mood>

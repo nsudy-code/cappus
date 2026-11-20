@@ -318,6 +318,28 @@ def main() -> int:
         r["reframe_x"] = round(float(np.clip(x, -limit, limit)), 3)
 
     ranked = [r for r in rows if r["duplicate_of"] is None]
+
+    # the footage's own accent color: the most common vivid hue across the keepers, made bright enough
+    # to read as text (a sunset gives orange, a reef teal, a party magenta)
+    px = np.concatenate([r["thumb"].reshape(-1, 3) for r in ranked if r["score"] >= 50] or [ranked[0]["thumb"].reshape(-1, 3)])
+    hi, lo = px.max(axis=1), px.min(axis=1)
+    vivid = px[((hi - lo) / np.maximum(hi, 1e-6) > 0.45) & (hi > 0.35)]
+    accent = None
+    if len(vivid) > 200:
+        r_, g_, b_ = vivid[:, 0], vivid[:, 1], vivid[:, 2]
+        mx = vivid.max(axis=1)
+        mn = vivid.min(axis=1)
+        d = np.maximum(mx - mn, 1e-6)
+        hue = np.where(mx == r_, ((g_ - b_) / d) % 6, np.where(mx == g_, (b_ - r_) / d + 2, (r_ - g_) / d + 4)) / 6
+        bins = np.floor(hue * 12).astype(int) % 12
+        top = np.bincount(bins, minlength=12).argmax()
+        c = vivid[bins == top].mean(axis=0)
+        c = c / max(c.max(), 1e-6)  # full brightness keeps the hue and reads on footage
+        accent = "#" + "".join(f"{int(round(v * 255)):02X}" for v in c)
+    energy = float(np.median([r["stats"]["motion"] for r in ranked])) if ranked else 0.0
+    lights = {}
+    for r in ranked:
+        lights[r["light"]] = lights.get(r["light"], 0) + 1
     dupes = [r for r in rows if r["duplicate_of"] is not None]
     clean = lambda r: {"rank": None, "file": r["file"], "name": r["name"], "shot": r["shot"],
                        "in": r["t0"], "out": r["t1"], "score": r["score"], "reasons": r["reasons"],
@@ -330,6 +352,8 @@ def main() -> int:
         s["rank"] = i
     report = {"files": len(files), "shots": len(rows), "keepers": sum(1 for s in shots if s["score"] >= 50),
               "duplicates": [clean(r) for r in dupes], "target": {"exposure": round(t_mean, 3), "saturation": round(t_sat, 3)},
+              "palette": {"accent": accent, "energy": round(energy, 4),
+                          "pace": "high" if energy > 0.03 else "low", "light": lights},
               "ranked": shots,
               "note": "Use shots with score >= 50, best window first. 'adjust' goes into the clip's \"adjust\"; "
                       "'reframe_x' into transform.x with \"fit\": \"cover\" on a vertical canvas. Slow motion only "

@@ -26,6 +26,7 @@ One JSON object. All times are **seconds**. Unknown keys are rejected (typos get
 | `fps` | 30 | Match the footage when it is consistently 24/25/60. CapCut projects run at 24, 25, 30, 50 or 60; any other value (29.97, 59.94) is rounded to the nearest with a warning. |
 | `allow_pro` | user's plan | Omit it normally: Pro is then allowed exactly when the user's saved plan is Pro (`tier.py`). Set `false` to force a free-only draft (e.g. it will be exported from a free account), `true` only if the user has Pro but it is not saved. |
 | `look` | none | A tested look (`looks.py` lists them): adds the styles `title`, `accent`, `big`, `label` and `caption`, and captions use `caption` by default. Spec `styles` with the same name override the look's key by key. |
+| `fonts` | look's pairing | `{"headline": "bebas", "body": "kilig"}`: swap the look's fonts for another curated pairing (see `looks.py <look>`, `pairings`). Sizes are scaled by the fonts' measured widths. Only with `look`. |
 | `brand` | look's colors | `{"accent": "#F59E0B", "text": "#FFFFFF", "muted": "#94A3B8"}`: the brand colors the look's styles use. Only with `look`. |
 | `styles` | {} | Named text styles, reused via `"style": "<name>"`. |
 | `video` | required | Main-track clips, in playback order. |
