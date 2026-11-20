@@ -34,6 +34,7 @@ import contrast
 import easing
 import looks as looks_mod
 import motion
+import sfx as sfx_mod
 from _common import font_width
 from pycapcut import assets as cc_assets
 from pycapcut.script_file import ScriptFile
@@ -90,6 +91,19 @@ KF_PROPS = {
 }
 TEXT_KF = {"x", "y", "scale", "rotation"}
 MOTIONS = {"push_in", "pull_out", "pan_left", "pan_right", "pan_up", "pan_down"}
+
+# Sound effects (sfx.py's kit or the user's own files): a top-level "sfx" list, or "sfx" on a clip,
+# a transition or a text, which then takes its time from that item.
+SFX_KEYS = {"sound", "src", "peak", "at", "take", "volume", "gain", "track", "id", "note"}
+SFX_CUE_KEYS = SFX_KEYS - {"at", "id"}
+SFX_OVER_MUSIC_DB = 3.0      # default level: this much over the music playing under it
+SFX_MAX_VOLUME = 4.0         # about +12 dB
+NOT_MUSIC = ("sfx", "vo", "voice")  # audio tracks named like this do not set the sfx level
+MAIN_KEYS = MAIN_KEYS | {"sfx"}
+OVERLAY_KEYS = OVERLAY_KEYS | {"sfx"}
+TEXT_KEYS = TEXT_KEYS | {"sfx"}
+TOP_KEYS = TOP_KEYS | {"sfx"}
+LIST_KEYS = LIST_KEYS + ("sfx",)
 
 _REF = re.compile(r"^@([A-Za-z0-9_\-]+)(?:\.(start|end))?\s*(?:([+-])\s*(\d+(?:\.\d*)?|\.\d+))?$")
 _END = re.compile(r"^end\s*(?:([+-])\s*(\d+(?:\.\d*)?|\.\d+))?$")
@@ -282,6 +296,8 @@ class Builder:
         self._scrim = False
         self._scrims: list = []      # (start, end, y) already dimmed
         self.notes: list = []        # things the builder decided for you, for the report
+        self.sfx_cues: list = []     # (ctx, sfx item, function -> picture time in us)
+        self.music: list = []        # (start, end, volume) of audio that sets the sfx level
 
     # ---------- looks, motion presets, text fit ----------
     @staticmethod
@@ -935,6 +951,8 @@ class Builder:
                     "photo": seg._mat.material_type == "photo", "fit": c.get("fit") or "contain",
                     "tx": self.clip_x(c, seg), "w": seg._mat.width, "h": seg._mat.height})
                 self.register(c, "clip", cursor, seg.duration, track, Path(seg._mat.path).name)
+                if c.get("sfx"):
+                    self.cue_sfx(c["sfx"], f"{ctx}.sfx", cursor)
                 cursor += seg.duration
             except ITEM_ERRORS as e:
                 self.fail(ctx, e)
@@ -946,7 +964,9 @@ class Builder:
                     if n == len(segs) - 1:
                         raise SpecError(f"{ctx}: a transition joins a clip to the NEXT one; the last clip has none (use an outro instead)")
                     tr = named(c["transition"], f"{ctx}.transition")
-                    check_keys(tr, {"name", "duration"}, f"{ctx}.transition")
+                    check_keys(tr, {"name", "duration", "sfx"}, f"{ctx}.transition")
+                    if tr.get("sfx"):  # on the cut, which is the middle of the transition
+                        self.cue_sfx(tr["sfx"], f"{ctx}.transition.sfx", segs[n + 1][0].target_timerange.start)
                     member = self.res("transition", tr["name"])
                     limit = min(seg.duration, segs[n + 1][0].duration) // 2
                     d = (secs(tr["duration"], f"{ctx}.transition.duration", lo=0) if "duration" in tr
@@ -975,6 +995,8 @@ class Builder:
                 track = self.place(cc.TrackType.video, c.get("track", "overlay"), seg.target_timerange)
                 self.script.add_segment(seg, track)
                 self.register(c, "overlay", start, seg.duration, track, Path(seg._mat.path).name)
+                if c.get("sfx"):
+                    self.cue_sfx(c["sfx"], f"{ctx}.sfx", start)
             except ITEM_ERRORS as e:
                 self.fail(ctx, e)
 
@@ -1062,6 +1084,8 @@ class Builder:
                 track = self.place(cc.TrackType.audio, a.get("track", "audio"), seg.target_timerange)
                 self.script.add_segment(seg, track)
                 self.register(a, "audio", start, dur, track, Path(mat.path).name)
+                if not track.lower().startswith(NOT_MUSIC):
+                    self.music.append((start, start + dur, vol))
             except ITEM_ERRORS as e:
                 self.fail(ctx, e)
 
@@ -1208,6 +1232,9 @@ class Builder:
         for i, item in enumerate(self.spec.get("texts") or []):
             try:
                 check_keys(item, TEXT_KEYS, f"texts[{i}]")
+                if item.get("sfx"):  # once for the text, not again for each echo copy
+                    self.cue_sfx(item["sfx"], f"texts[{i}].sfx", item.get("at", 0))
+                    item = {k: v for k, v in item.items() if k != "sfx"}
                 expanded += self.echo_items(item, f"texts[{i}]")
             except ITEM_ERRORS as e:
                 self.fail(f"texts[{i}]", e)
@@ -1440,6 +1467,100 @@ class Builder:
             except ITEM_ERRORS as err:
                 self.fail(ctx, err)
 
+    # ---------- sound effects ----------
+    def cue_sfx(self, value, ctx, at):
+        """Queue a sound for build_sfx; at is microseconds, or a spec time resolved there."""
+        item = {"sound": value} if isinstance(value, str) else value
+        check_keys(item, SFX_CUE_KEYS, ctx)
+        if isinstance(at, int):
+            when = lambda: at  # noqa: E731
+        else:
+            when = lambda: self.t(at, f"{ctx.rsplit('.', 1)[0]}.at")  # noqa: E731
+        self.sfx_cues.append((ctx, item, when))
+
+    def music_level(self, t) -> float:
+        playing = [v for s, e, v in self.music if s <= t < e]
+        return max(playing) if playing else 1.0
+
+    def sfx_source(self, item, ctx, kit, rotation):
+        """(file path, peak in us) for one sound: a generated take (rotating) or the user's file."""
+        if ("src" in item) == ("sound" in item):
+            raise SpecError(f"{ctx}: give \"sound\" (one of {sorted(sfx_mod.SOUNDS)}) or \"src\" (your own file), not both")
+        if "src" in item:
+            if "take" in item:
+                raise SpecError(f"{ctx}: \"take\" picks one of the generated sounds; it does not apply to \"src\"")
+            return self.path(item["src"], ctx), secs(item.get("peak", 0), f"{ctx}.peak", lo=0)
+        sound = item["sound"]
+        if sound not in sfx_mod.SOUNDS:
+            raise SpecError(f"{ctx}: unknown sound {sound!r}. Sounds: {sorted(sfx_mod.SOUNDS)} "
+                            "(or use \"src\" for your own file)")
+        if "peak" in item:
+            raise SpecError(f"{ctx}: \"peak\" is only for your own \"src\" files; the generated sounds know theirs")
+        if not kit:
+            try:
+                kit.update(sfx_mod.kit()["sounds"])
+            except OSError as e:
+                raise SpecError(f"{ctx}: could not write the sound-effect kit ({e}); run sfx.py --out DIR "
+                                "and use \"src\" with \"peak\" instead")
+        takes = kit[sound]
+        if "take" in item:
+            k = int(num(item["take"], f"{ctx}.take", lo=1, hi=len(takes))) - 1
+        else:
+            k = rotation.get(sound, 0) % len(takes)
+            rotation[sound] = k + 1
+        return takes[k]["path"], us(takes[k]["peak"])
+
+    def build_sfx(self):
+        """Each sound starts so its peak lands one frame after its picture (heard on the frame that
+        shows it, as editors place them by ear), a few dB over the music under it."""
+        cues = list(self.sfx_cues)
+        for i, item in enumerate(self.spec.get("sfx") or []):
+            ctx = f"sfx[{i}]"
+            try:
+                check_keys(item, SFX_KEYS, ctx)
+                if "at" not in item:
+                    raise SpecError(f"{ctx}: \"at\" is required (when the picture it goes with happens)")
+                cues.append((ctx, item, lambda item=item, ctx=ctx: self.t(item["at"], f"{ctx}.at")))
+            except ITEM_ERRORS as e:
+                self.fail(ctx, e)
+        timed = []
+        for ctx, item, when in cues:
+            try:
+                timed.append((when(), ctx, item))
+            except ITEM_ERRORS as e:
+                self.fail(ctx, e)
+        kit, rotation = {}, {}
+        frame = int(round(1_000_000 / self.fps))
+        for t, ctx, item in sorted(timed, key=lambda c: c[0]):
+            try:
+                path, peak = self.sfx_source(item, ctx, kit, rotation)
+                mat = self.amat(path, ctx)
+                if peak > mat.duration:
+                    raise SpecError(f"{ctx}: peak {sec(peak)}s is past the end of the file ({sec(mat.duration)}s)")
+                target = t + frame
+                start, tin = target - peak, 0
+                if start < 0:  # the lead-in would start before 0: drop that part
+                    tin, start = -start, 0
+                dur = min(mat.duration - tin, self.main_end - start)
+                if dur <= 0:
+                    raise SpecError(f"{ctx}: {sec(t)}s is past the end of the video ({sec(self.main_end)}s)")
+                gain = num(item.get("gain", 0), f"{ctx}.gain", lo=-40, hi=20)
+                if "volume" in item:
+                    vol = num(item["volume"], f"{ctx}.volume", lo=0)
+                else:
+                    vol = self.music_level(target) * 10 ** (SFX_OVER_MUSIC_DB / 20)
+                vol *= 10 ** (gain / 20)
+                if vol > SFX_MAX_VOLUME:
+                    self.warnings.append(f"{ctx}: volume {vol:.2f} capped at {SFX_MAX_VOLUME:g} (about +12 dB)")
+                    vol = SFX_MAX_VOLUME
+                seg = cc.AudioSegment(mat, cc.Timerange(start, dur), source_timerange=cc.Timerange(tin, dur),
+                                      volume=round(vol, 3))
+                track = self.place(cc.TrackType.audio, item.get("track", "sfx"), seg.target_timerange)
+                self.script.add_segment(seg, track)
+                self.register(item, "sfx", start, dur, track, f"{Path(path).name}, peak at {sec(target)}s")
+            except ITEM_ERRORS as e:
+                self.fail(ctx, e)
+
     def build(self):
         try:
             self.build_main()
@@ -1451,6 +1572,7 @@ class Builder:
         self.build_texts()
         self.build_captions()
         self.build_fx()
+        self.build_sfx()
         for track in self.script.tracks.values():  # CapCut expects each track in time order
             track.segments.sort(key=lambda s: s.target_timerange.start)
         total = self.script.duration

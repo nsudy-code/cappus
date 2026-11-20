@@ -98,7 +98,7 @@ CapCut's keyframe menu. Checked in CapCut 9.8: a draft written this way opens, p
 | Auto reframe | Select clip > Auto reframe. |
 | A keyframe curve that is more than one bezier per segment | CapCut's keyframe graph. The spec's `ease` writes one bezier per segment: a CapCut preset (right-click a keyframe > Show all presets) or a custom curve. |
 | Color grading wheels / HSL / curves / LUT | Select clip > Adjust. (The spec can only set saturation/contrast/brightness via keyframes.) |
-| Sound effects, CapCut music library | Audio > Sound effects / Music. |
+| CapCut's sound-effect and music library (the spec's `sfx` has its own generated kit) | Audio > Sound effects / Music. |
 | Stickers from the library | Stickers panel (or harvest ids, see below). |
 | Text templates | Text > Text templates. |
 | Noise reduction, voice enhance | Select audio > Reduce noise / Enhance voice. |
