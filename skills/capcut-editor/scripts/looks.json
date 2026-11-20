@@ -1,0 +1,585 @@
+{
+ "_about": "Looks: tested combinations of fonts, colors, text styles and motion, so an edit looks designed from the first build. A spec uses one with \"look\": \"<name>\" (and \"brand\" for its colors). The builder adds the look's styles (title, accent, big, label, caption); styles in the spec with the same name override them key by key. Colors: $text, $accent and $muted are replaced by spec.brand, else by the look's own colors. Everything else here (cards, transitions, hit, filter, pace, music) is guidance for whoever writes the spec. All items are free CapCut resources.",
+ "looks": {
+  "bold_promo": {
+   "description": "Loud and punchy: condensed heavy headlines that hit on every beat. Ads, sales, product launches, gyms, events.",
+   "fonts": {
+    "headline": "anton",
+    "body": "poppins_bold"
+   },
+   "colors": {
+    "text": "#FFFFFF",
+    "accent": "#FFD400",
+    "muted": "#B8B8C0",
+    "background": "#0B0B0F"
+   },
+   "styles": {
+    "title": {
+     "font": "anton",
+     "size": 15,
+     "color": "$text",
+     "enter": "punch"
+    },
+    "accent": {
+     "font": "anton",
+     "size": 20,
+     "color": "$accent",
+     "enter": "punch"
+    },
+    "big": {
+     "font": "anton",
+     "size": 30,
+     "color": "$accent",
+     "enter": "pop"
+    },
+    "label": {
+     "font": "poppins_bold",
+     "size": 7,
+     "color": "$muted",
+     "intro": {
+      "name": "reveal_up",
+      "duration": 0.3
+     }
+    },
+    "caption": {
+     "font": "poppins_bold",
+     "size": 9,
+     "bold": true,
+     "color": "$text",
+     "stroke": {
+      "color": "#000000",
+      "width": 45
+     }
+    }
+   },
+   "cards": {
+    "enter": "pop",
+    "drift": 0.04
+   },
+   "transitions": [
+    "white_flash",
+    "whip_horizontal"
+   ],
+   "hit": {
+    "effect": "shake",
+    "duration": 0.3
+   },
+   "filter": null,
+   "pace": "text changes every beat, cuts every 1-2 beats; one hit on the drop and one on the end card",
+   "music": {
+    "mood": "hype",
+    "bpm": 124
+   }
+  },
+  "clean_tech": {
+   "description": "Calm and modern: geometric sans, text that rises into place, soft slides. SaaS, websites, agencies, apps, explainers.",
+   "fonts": {
+    "headline": "poppins_bold",
+    "body": "poppins_bold"
+   },
+   "colors": {
+    "text": "#FFFFFF",
+    "accent": "#4F8CFF",
+    "muted": "#94A3B8",
+    "background": "#090D16"
+   },
+   "styles": {
+    "title": {
+     "font": "poppins_bold",
+     "size": 12,
+     "bold": true,
+     "color": "$text",
+     "enter": "rise"
+    },
+    "accent": {
+     "font": "poppins_bold",
+     "size": 15,
+     "bold": true,
+     "color": "$accent",
+     "enter": "rise"
+    },
+    "big": {
+     "font": "poppins_bold",
+     "size": 22,
+     "bold": true,
+     "color": "$accent",
+     "enter": "pop"
+    },
+    "label": {
+     "font": "poppins_bold",
+     "size": 8,
+     "color": "$muted",
+     "intro": {
+      "name": "reveal_up",
+      "duration": 0.3
+     }
+    },
+    "caption": {
+     "font": "poppins_bold",
+     "size": 9,
+     "bold": true,
+     "color": "$text",
+     "background": {
+      "color": "#000000",
+      "opacity": 0.55,
+      "radius": 0.3
+     }
+    }
+   },
+   "cards": {
+    "enter": "rise",
+    "drift": 0.035
+   },
+   "transitions": [
+    "slide_left",
+    "push_left"
+   ],
+   "hit": {
+    "effect": "shake",
+    "duration": 0.25
+   },
+   "filter": null,
+   "pace": "text changes every 1-2 beats, cards every bar",
+   "music": {
+    "mood": "corporate",
+    "bpm": 112
+   }
+  },
+  "cinematic": {
+   "description": "Slow and grand: wide-tracked classical capitals, fades and dissolves, a film look. Travel, brand stories, real estate, documentaries.",
+   "fonts": {
+    "headline": "cinzel",
+    "body": "futura"
+   },
+   "colors": {
+    "text": "#F5F1E8",
+    "accent": "#E8C27A",
+    "muted": "#B9B2A3",
+    "background": "#07070A"
+   },
+   "styles": {
+    "title": {
+     "font": "cinzel",
+     "size": 12,
+     "letter_spacing": 4,
+     "color": "$text",
+     "intro": {
+      "name": "blur_in",
+      "duration": 0.6
+     }
+    },
+    "accent": {
+     "font": "cinzel",
+     "size": 15,
+     "letter_spacing": 4,
+     "color": "$accent",
+     "intro": {
+      "name": "blur_in",
+      "duration": 0.6
+     }
+    },
+    "big": {
+     "font": "cinzel",
+     "size": 22,
+     "letter_spacing": 6,
+     "color": "$text",
+     "intro": {
+      "name": "blur_in",
+      "duration": 0.8
+     }
+    },
+    "label": {
+     "font": "futura",
+     "size": 7,
+     "letter_spacing": 2,
+     "color": "$muted",
+     "intro": {
+      "name": "fade_in",
+      "duration": 0.5
+     }
+    },
+    "caption": {
+     "font": "futura",
+     "size": 8,
+     "color": "$text",
+     "shadow": {
+      "color": "#000000",
+      "opacity": 0.8,
+      "blur": 20,
+      "distance": 3
+     }
+    }
+   },
+   "cards": {
+    "enter": "fade",
+    "drift": 0.05
+   },
+   "transitions": [
+    "dissolve",
+    "fade_black"
+   ],
+   "hit": null,
+   "filter": {
+    "name": "teal_orange",
+    "intensity": 45
+   },
+   "pace": "text holds 2-4 beats, shots 2-4 bars, dissolves between places",
+   "music": {
+    "mood": "cinematic",
+    "bpm": 90
+   }
+  },
+  "playful": {
+   "description": "Bouncy and bright: rounded heavy letters that pop in, quick bounces. Kids, food, cafes, pets, fun social posts.",
+   "fonts": {
+    "headline": "funny_cute",
+    "body": "nunito"
+   },
+   "colors": {
+    "text": "#FFFFFF",
+    "accent": "#FF5DA2",
+    "muted": "#FFE8F2",
+    "background": "#2A1B4D"
+   },
+   "styles": {
+    "title": {
+     "font": "funny_cute",
+     "size": 11,
+     "color": "$text",
+     "stroke": {
+      "color": "#1B1035",
+      "width": 40
+     },
+     "enter": "pop"
+    },
+    "accent": {
+     "font": "funny_cute",
+     "size": 13,
+     "color": "$accent",
+     "stroke": {
+      "color": "#1B1035",
+      "width": 40
+     },
+     "enter": "pop"
+    },
+    "big": {
+     "font": "funny_cute",
+     "size": 18,
+     "color": "$accent",
+     "stroke": {
+      "color": "#1B1035",
+      "width": 45
+     },
+     "enter": "drop"
+    },
+    "label": {
+     "font": "nunito",
+     "size": 8,
+     "bold": true,
+     "color": "$muted",
+     "enter": "rise"
+    },
+    "caption": {
+     "font": "nunito",
+     "size": 9,
+     "bold": true,
+     "color": "$text",
+     "stroke": {
+      "color": "#1B1035",
+      "width": 45
+     }
+    }
+   },
+   "cards": {
+    "enter": "pop",
+    "drift": 0.03
+   },
+   "transitions": [
+    "bounce",
+    "spin_cw"
+   ],
+   "hit": {
+    "effect": "shake",
+    "duration": 0.25
+   },
+   "filter": null,
+   "pace": "text pops every beat, cards every 1-2 beats",
+   "music": {
+    "mood": "hype",
+    "bpm": 126
+   }
+  },
+  "luxury": {
+   "description": "Quiet and expensive: a fashion serif over thin capitals, slow rises, gold on black. Fashion, jewelry, hotels, property, salons.",
+   "fonts": {
+    "headline": "didot",
+    "body": "giveny"
+   },
+   "colors": {
+    "text": "#F7F3EA",
+    "accent": "#D4AF37",
+    "muted": "#BDB5A6",
+    "background": "#050505"
+   },
+   "styles": {
+    "title": {
+     "font": "didot",
+     "size": 13,
+     "letter_spacing": 2,
+     "color": "$text",
+     "enter": {
+      "name": "rise",
+      "duration": 0.7
+     }
+    },
+    "accent": {
+     "font": "didot",
+     "size": 16,
+     "letter_spacing": 2,
+     "color": "$accent",
+     "enter": {
+      "name": "rise",
+      "duration": 0.7
+     }
+    },
+    "big": {
+     "font": "didot",
+     "size": 24,
+     "letter_spacing": 3,
+     "color": "$accent",
+     "intro": {
+      "name": "fade_in",
+      "duration": 0.8
+     }
+    },
+    "label": {
+     "font": "giveny",
+     "size": 7,
+     "letter_spacing": 4,
+     "color": "$muted",
+     "intro": {
+      "name": "fade_in",
+      "duration": 0.6
+     }
+    },
+    "caption": {
+     "font": "giveny",
+     "size": 8,
+     "letter_spacing": 2,
+     "color": "$text",
+     "shadow": {
+      "color": "#000000",
+      "opacity": 0.8,
+      "blur": 20,
+      "distance": 3
+     }
+    }
+   },
+   "cards": {
+    "enter": {
+     "name": "fade",
+     "duration": 0.6
+    },
+    "drift": 0.04
+   },
+   "transitions": [
+    "dissolve"
+   ],
+   "hit": null,
+   "filter": {
+    "name": "gold200",
+    "intensity": 35
+   },
+   "pace": "text holds 2-4 beats, slow cuts on bars, no shakes",
+   "music": {
+    "mood": "chill",
+    "bpm": 88
+   }
+  },
+  "street": {
+   "description": "Fast and raw: brushed italic capitals that slide in, whips and glitches. Sport, streetwear, gaming, automotive, music.",
+   "fonts": {
+    "headline": "facon",
+    "body": "bebas"
+   },
+   "colors": {
+    "text": "#FFFFFF",
+    "accent": "#00F0FF",
+    "muted": "#C9C9C9",
+    "background": "#0A0A0A"
+   },
+   "styles": {
+    "title": {
+     "font": "facon",
+     "size": 12,
+     "color": "$text",
+     "enter": "slide_right"
+    },
+    "accent": {
+     "font": "facon",
+     "size": 14,
+     "color": "$accent",
+     "enter": "slide_right"
+    },
+    "big": {
+     "font": "facon",
+     "size": 20,
+     "color": "$accent",
+     "enter": "punch"
+    },
+    "label": {
+     "font": "bebas",
+     "size": 9,
+     "letter_spacing": 2,
+     "color": "$muted",
+     "enter": "rise"
+    },
+    "caption": {
+     "font": "bebas",
+     "size": 11,
+     "color": "$text",
+     "stroke": {
+      "color": "#000000",
+      "width": 45
+     }
+    }
+   },
+   "cards": {
+    "enter": "slide_left",
+    "drift": 0.05
+   },
+   "transitions": [
+    "whip_horizontal",
+    "glitch"
+   ],
+   "hit": {
+    "effect": "shake",
+    "duration": 0.3
+   },
+   "filter": null,
+   "pace": "text every beat, cuts every beat in bursts, a hit on each drop",
+   "music": {
+    "mood": "hype",
+    "bpm": 128
+   }
+  },
+  "kinetic": {
+   "description": "Full-screen kinetic typography: one or two huge words per beat on black, heavy wide capitals against a light italic serif, every word slamming, whipping or spinning in and breathing while it holds. The most striking promo with no footage at all: websites, services, launches, announcements.",
+   "fonts": {
+    "headline": "coda_heavy",
+    "body": "playfair_italic"
+   },
+   "colors": {
+    "text": "#FFFFFF",
+    "accent": "#FFFFFF",
+    "muted": "#BDBDBD",
+    "background": "#000000"
+   },
+   "styles": {
+    "word": {
+     "font": "coda_heavy",
+     "fit_width": 0.86,
+     "size_max": 40,
+     "color": "$text",
+     "enter": "slam",
+     "drift": 0.05
+    },
+    "tilt": {
+     "font": "coda_heavy",
+     "fit_width": 0.86,
+     "size_max": 40,
+     "color": "$text",
+     "enter": "slam_tilt",
+     "drift": 0.05
+    },
+    "accent": {
+     "font": "coda_heavy",
+     "fit_width": 0.86,
+     "size_max": 40,
+     "color": "$accent",
+     "enter": "slam",
+     "drift": 0.05
+    },
+    "soft": {
+     "font": "playfair_italic",
+     "fit_width": 0.62,
+     "size_max": 26,
+     "color": "$text",
+     "intro": {
+      "name": "wave_in",
+      "duration": 0.3
+     },
+     "drift": 0.05
+    },
+    "letter": {
+     "font": "coda_heavy",
+     "size": 44,
+     "color": "$text",
+     "enter": "slam_tilt",
+     "drift": 0.05
+    },
+    "outline": {
+     "font": "coda_heavy",
+     "color": "#000000",
+     "stroke": {
+      "color": "$text",
+      "width": 32
+     },
+     "enter": "slam"
+    },
+    "title": {
+     "font": "coda_heavy",
+     "size": 13,
+     "color": "$text",
+     "enter": "slam",
+     "drift": 0.05
+    },
+    "big": {
+     "font": "coda_heavy",
+     "fit_width": 0.8,
+     "size_max": 30,
+     "color": "$accent",
+     "intro": {
+      "name": "wave_in",
+      "duration": 0.35
+     },
+     "drift": 0.05
+    },
+    "label": {
+     "font": "playfair_italic",
+     "size": 8,
+     "color": "$muted",
+     "intro": {
+      "name": "typewriter",
+      "duration": 0.3
+     },
+     "drift": 0.05
+    },
+    "caption": {
+     "font": "coda_heavy",
+     "size": 9,
+     "color": "$text",
+     "stroke": {
+      "color": "#000000",
+      "width": 40
+     }
+    }
+   },
+   "cards": {
+    "enter": "slam",
+    "drift": 0.05
+   },
+   "transitions": [],
+   "hit": {
+    "effect": "shake",
+    "duration": 0.25
+   },
+   "filter": null,
+   "pace": "a new word on every beat; second words of a phrase on the half beat; single giant letters on quarter beats; echo copies 1/8 beat apart; a zoom_through exit on the last word of each section; shake on 4-6 accents only",
+   "music": {
+    "mood": "hype",
+    "bpm": 92
+   }
+  }
+ }
+}

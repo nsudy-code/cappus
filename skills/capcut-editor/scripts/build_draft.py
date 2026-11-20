@@ -30,6 +30,9 @@ from pathlib import Path
 from _common import (BACKUPS_KEPT, BUILD_FILE, MARKER, TIMELINE_ID, SpecError, backups_dir, cc, edit_check,
                      find_drafts_dir, label, param_names, resolve, signature_hash, timeline_signature, user_tier)
 
+import looks as looks_mod
+import motion
+from _common import font_width
 from pycapcut import assets as cc_assets
 from pycapcut.script_file import ScriptFile
 
@@ -40,7 +43,7 @@ DRAFT_DIR_TOKEN = "##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80
 VISUAL_KEYS = {
     "id", "src", "in", "out", "duration", "speed", "volume", "mute", "fit", "background", "transform",
     "keyframes", "motion", "intro", "outro", "combo", "filter", "effects", "mask", "blend", "chroma",
-    "remove_bg", "fade", "note",
+    "remove_bg", "fade", "enter", "exit", "drift", "note",
 }
 MAIN_KEYS = VISUAL_KEYS | {"transition"}
 OVERLAY_KEYS = VISUAL_KEYS | {"at", "end", "track"}
@@ -49,9 +52,11 @@ AUDIO_KEYS = {"id", "src", "at", "end", "in", "out", "duration", "speed", "volum
 STYLE_KEYS = {
     "font", "size", "color", "opacity", "bold", "italic", "underline", "align", "vertical",
     "letter_spacing", "line_spacing", "wrap", "x", "y", "scale", "rotation", "stroke", "shadow",
-    "background", "intro", "outro", "loop", "effect_id", "bubble",
+    "background", "intro", "outro", "loop", "effect_id", "bubble", "enter", "exit", "drift",
+    "fit_width", "size_max",
 }
-TEXT_KEYS = STYLE_KEYS | {"text", "at", "end", "duration", "track", "style", "keyframes", "note"}
+TEXT_KEYS = STYLE_KEYS | {"text", "at", "end", "duration", "track", "style", "keyframes", "echo", "note"}
+ECHO_KEYS = {"count", "spacing", "stagger", "style", "color", "stroke"}
 CAPTION_KEYS = {"transcript", "srt", "cues", "words", "source", "max_words", "max_chars", "max_gap",
                 "uppercase", "punctuation", "offset", "style", "track", "min_duration", "note"}
 NO_SPACE_LANGS = {"zh", "ja", "yue", "th", "lo", "my", "km", "bo"}  # written without spaces between words
@@ -64,7 +69,7 @@ _PUNCT = re.compile(r"(?<!\d)[.,!?;:…。，、！？]+|[.,!?;:…]+(?!\d)")
 FX_KEYS = {"name", "at", "end", "duration", "params", "track", "note"}
 FILTER_KEYS = {"name", "at", "end", "duration", "intensity", "track", "note"}
 STICKER_KEYS = {"resource_id", "at", "end", "duration", "transform", "track", "keyframes", "note"}
-TOP_KEYS = {"name", "width", "height", "fps", "allow_pro", "styles", "video", "overlays", "audio",
+TOP_KEYS = {"name", "width", "height", "fps", "allow_pro", "look", "brand", "styles", "video", "overlays", "audio",
             "texts", "captions", "effects", "filters", "stickers", "note"}
 LIST_KEYS = ("video", "overlays", "audio", "texts", "effects", "filters", "stickers")
 
@@ -240,7 +245,76 @@ class Builder:
         self._vmats: dict = {}
         self._amats: dict = {}
         self._track_count: dict = {}
-        self.styles = spec.get("styles", {}) or {}
+        self.styles = self.resolve_styles(spec)
+        self._fit_warned: set = set()
+
+    # ---------- looks, motion presets, text fit ----------
+    @staticmethod
+    def resolve_styles(spec) -> dict:
+        """The look's styles (if the spec names a look), overridden key by key by spec.styles."""
+        own = spec.get("styles") or {}
+        if "brand" in spec and not spec.get("look"):
+            raise SpecError("spec.brand only applies together with spec.look")
+        if not spec.get("look"):
+            return own
+        if not isinstance(spec["look"], str):
+            raise SpecError("spec.look must be the name of a look (run looks.py to list them)")
+        try:
+            merged = looks_mod.styles(spec["look"], spec.get("brand"))
+        except looks_mod.LookError as e:
+            raise SpecError(str(e))
+        for name, st in own.items():
+            merged[name] = {**merged[name], **st} if isinstance(st, dict) and name in merged else st
+        return merged
+
+    def presets(self, item, kf, dur_us, rest, kind, ctx, width=0.0):
+        """Add the item's "enter" / "exit" presets (motion.py) to its keyframes dict and return it."""
+        dur = dur_us / 1_000_000
+        for key, table, build in (("enter", motion.ENTER, "enter"), ("exit", motion.EXIT, "exit")):
+            if not item.get(key):
+                continue
+            p = named(item[key], f"{ctx}.{key}")
+            check_keys(p, {"name", "duration"}, f"{ctx}.{key}")
+            name = p["name"]
+            if name not in table or kind not in table[name][1]:
+                usable = sorted(n for n, (_, kinds) in table.items() if kind in kinds)
+                raise SpecError(f"{ctx}.{key}: no {key} preset '{name}' for {kind}s. Presets: {usable}")
+            d = num(p.get("duration", table[name][0]), f"{ctx}.{key}.duration", above=0)
+            d = min(d, dur / 2 if item.get("enter") and item.get("exit") else dur)
+            if build == "enter":
+                pts, window = motion.enter_points(name, d, rest, kind, width), (0.0, d)
+            else:
+                pts, window = motion.exit_points(name, d, dur, rest, kind), (dur - d, dur)
+            for prop, added in pts.items():
+                base = [[float(t) + dur if float(t) < 0 else float(t), v] for t, v in kf.get(prop, [])]
+                kf[prop] = motion.merge(sorted(base), added, window, build)
+        return kf
+
+    def check_fit(self, text, st, member, ctx):
+        """Warn once per item when a line is likely wider than the wrap width (it would wrap onto an
+        extra line) or than the canvas. Widths are estimates from fonts.json, measured in CapCut."""
+        if ctx in self._fit_warned:
+            return
+        k, caps_only = font_width(member) if member is not None else (2.6, False)
+        size = float(st.get("size", 8)) * float(st.get("scale", 1.0))
+        spacing = float(st.get("letter_spacing", 0)) * 0.6 * size / 10  # CapCut units, roughly
+        wrap = st.get("wrap", 0.82)
+        limit = (0.82 if wrap is True else float(wrap or 0)) * self.width
+        for line in str(text).split("\n"):
+            caps = line.upper() == line and any(ch.isalpha() for ch in line) and not caps_only
+            px = len(line) * (k * size * (1.15 if caps else 1.0) + spacing) * self.width / 1080
+            if limit and px > limit:
+                fit = size * limit / px
+                self.warnings.append(f"{ctx}: '{line[:30]}' is about {int(px)} px wide at size {size:g}, wider than "
+                                     f"the {int(limit)} px wrap width, so it wraps onto another line. Shorten it or "
+                                     f"use size {fit:.0f} or less.")
+                self._fit_warned.add(ctx)
+                return
+            if not limit and px > 0.95 * self.width:
+                self.warnings.append(f"{ctx}: '{line[:30]}' is about {int(px)} px wide at size {size:g} with wrapping "
+                                     f"off, so it runs off the {self.width} px canvas.")
+                self._fit_warned.add(ctx)
+                return
 
     # ---------- helpers ----------
     def fail(self, ctx, e):
@@ -582,6 +656,18 @@ class Builder:
                 if prop in kf:
                     raise SpecError(f"{ctx}: motion preset and keyframes both animate '{prop}'; keep only one")
                 kf[prop] = pts
+        tr = c.get("transform") or {}
+        s = float(tr.get("scale_x", tr.get("scale", 1.0)))
+        if c.get("drift") and "scale" not in kf and not c.get("motion"):
+            d = num(c["drift"], f"{ctx}.drift", lo=0, hi=1)
+            kf["scale"] = [[0, s], [dur / 1_000_000, s * (1 + d)]]
+        if c.get("enter") or c.get("exit"):
+            rest = {"x": float(tr.get("x", 0)), "y": float(tr.get("y", 0)), "scale": s,
+                    "opacity": float(tr.get("opacity", 1.0)), "rotation": float(tr.get("rotation", 0))}
+            mat = seg._mat
+            fitted = mat.width * min(self.width / mat.width, self.height / mat.height)  # px at scale 1, "contain"
+            width = 2 * fitted * seg._base * s / self.width  # in half-canvas units
+            self.presets(c, kf, dur, rest, "overlay", ctx, width)
         self.keyframes(seg, kf, ctx, base=seg._base)
 
     def params(self, member, params, ctx):
@@ -804,9 +890,11 @@ class Builder:
                 height=num(g.get("height", 0.14), f"{ctx}.background.height", lo=0, hi=1),
                 width=num(g.get("width", 0.14), f"{ctx}.background.width", lo=0, hi=1))
         sc = num(st.get("scale", 1.0), f"{ctx}.scale", above=0)
+        font = self.res("font", st["font"]) if st.get("font") else None
+        self.check_fit(text, st, font, ctx)
         seg = cc.TextSegment(
             text, cc.Timerange(start, dur),
-            font=self.res("font", st["font"]) if st.get("font") else None, style=style,
+            font=font, style=style,
             clip_settings=cc.ClipSettings(transform_x=num(st.get("x", 0), f"{ctx}.x"),
                                           transform_y=num(st.get("y", 0), f"{ctx}.y"),
                                           scale_x=sc, scale_y=sc, rotation=num(st.get("rotation", 0), f"{ctx}.rotation")),
@@ -833,16 +921,81 @@ class Builder:
             seg.add_bubble(str(b["effect_id"]), str(b["resource_id"]))
         return seg
 
+    def echo_items(self, item, ctx):
+        """The item plus its echo copies: the same word repeated above and below it, each a little
+        later, outlined (or in the echo's style), like a stamp hitting the screen several times."""
+        echo = item.get("echo")
+        if not echo:
+            return [(ctx, item)]
+        if echo is True:
+            echo = {}
+        check_keys(echo, ECHO_KEYS, f"{ctx}.echo")
+        count = int(num(echo.get("count", 4), f"{ctx}.echo.count", lo=1, hi=8))
+        spacing = num(echo.get("spacing", 0.2), f"{ctx}.echo.spacing", above=0, hi=1)
+        stagger = num(echo.get("stagger", 0.08), f"{ctx}.echo.stagger", lo=0, hi=1)
+        main = {k: v for k, v in item.items() if k != "echo"}
+        out = [(ctx, main)]
+        base_y = float(self.style_of(main, ctx).get("y", 0))
+        start = self.t(main.get("at", 0), f"{ctx}.at")
+        for n in range(count):
+            step = n // 2 + 1
+            copy = {k: v for k, v in main.items() if k not in ("exit", "keyframes", "style")}
+            copy.update({k: v for k, v in self.style_of(main, ctx).items() if k not in ("exit", "intro", "outro")})
+            copy["y"] = round(base_y + (step if n % 2 == 0 else -step) * spacing, 4)
+            copy["at"] = round(start / 1e6 + stagger * (n + 1), 4)
+            if "duration" in copy:
+                copy["duration"] = max(0.05, float(copy["duration"]) - stagger * (n + 1))
+            if echo.get("style"):
+                copy["style"] = echo["style"]
+                for k in self.styles.get(echo["style"], {}):
+                    if k not in ("x", "y", "size", "fit_width", "font", "rotation"):
+                        copy.pop(k, None)
+            else:
+                copy["color"] = echo.get("color", "#000000")
+                copy["stroke"] = echo.get("stroke", {"color": "#FFFFFF", "width": 32})
+            copy.pop("loop", None)
+            out.append((f"{ctx}.echo[{n}]", copy))
+        return out
+
+    def fit_size(self, text, st, ctx):
+        """The size that makes the longest line `fit_width` of the canvas wide, from fonts.json."""
+        fit = num(st["fit_width"], f"{ctx}.fit_width", above=0, hi=1)
+        member = self.res("font", st["font"]) if st.get("font") else None
+        k, caps_only = font_width(member) if member is not None else (2.6, False)
+        line = max(str(text).split("\n"), key=len)
+        caps = line.upper() == line and any(ch.isalpha() for ch in line) and not caps_only
+        size = fit * 1080 / max(1, len(line)) / (k * (1.15 if caps else 1.0))
+        return round(min(size, num(st.get("size_max", 48), f"{ctx}.size_max", above=0)), 1)
+
     def build_texts(self):
+        expanded = []
         for i, item in enumerate(self.spec.get("texts") or []):
-            ctx = f"texts[{i}]"
+            try:
+                check_keys(item, TEXT_KEYS, f"texts[{i}]")
+                expanded += self.echo_items(item, f"texts[{i}]")
+            except ITEM_ERRORS as e:
+                self.fail(f"texts[{i}]", e)
+        for ctx, item in expanded:
             try:
                 check_keys(item, TEXT_KEYS, ctx)
                 if not isinstance(item.get("text"), str) or not item["text"].strip():
                     raise SpecError(f"{ctx}: \"text\" is required")
                 start, dur = self.span(item, ctx)
-                seg = self.make_text(item["text"], start, dur, self.style_of(item, ctx), ctx)
-                self.keyframes(seg, item.get("keyframes"), ctx, allowed=TEXT_KF)
+                st = self.style_of(item, ctx)
+                if st.get("fit_width"):
+                    st = dict(st, size=self.fit_size(item["text"], st, ctx))
+                    st.setdefault("wrap", False)
+                seg = self.make_text(item["text"], start, dur, st, ctx)
+                kf = dict(item.get("keyframes") or {})
+                sc = float(st.get("scale", 1.0))
+                if st.get("drift") and "scale" not in kf:
+                    d = num(st["drift"], f"{ctx}.drift", lo=0, hi=1)
+                    kf["scale"] = [[0, sc], [dur / 1_000_000, sc * (1 + d)]]
+                if st.get("enter") or st.get("exit"):
+                    rest = {"x": float(st.get("x", 0)), "y": float(st.get("y", 0)), "scale": sc,
+                            "opacity": 1.0, "rotation": float(st.get("rotation", 0))}
+                    self.presets(st, kf, dur, rest, "text", ctx)
+                self.keyframes(seg, kf, ctx, allowed=TEXT_KF)
                 track = self.place(cc.TrackType.text, item.get("track", "text"), seg.target_timerange)
                 self.script.add_segment(seg, track)
                 self.register(item, "text", start, dur, track, item["text"].replace("\n", " / ")[:40])
@@ -989,7 +1142,8 @@ class Builder:
             try:
                 check_keys(cap, CAPTION_KEYS, ctx)
                 st = {"size": 9, "y": -0.6, "bold": True, "stroke": {"color": "#000000", "width": 40}}
-                st.update(self.style_of({"style": cap.get("style")}, ctx))
+                default = "caption" if self.spec.get("look") and "caption" in self.styles else None
+                st.update(self.style_of({"style": cap.get("style") or default}, ctx))
                 cues, desc = self.caption_cues(cap, ctx)
                 if not cues:
                     self.warnings.append(f"{ctx}: no caption cues found")

@@ -25,6 +25,8 @@ One JSON object. All times are **seconds**. Unknown keys are rejected (typos get
 | `width`, `height` | 1080, 1920 | Canvas. 9:16 = 1080x1920, 16:9 = 1920x1080, 1:1 = 1080x1080, 4:5 = 1080x1350. |
 | `fps` | 30 | Match the footage when it is consistently 24/25/60. CapCut projects run at 24, 25, 30, 50 or 60; any other value (29.97, 59.94) is rounded to the nearest with a warning. |
 | `allow_pro` | user's plan | Omit it normally: Pro is then allowed exactly when the user's saved plan is Pro (`tier.py`). Set `false` to force a free-only draft (e.g. it will be exported from a free account), `true` only if the user has Pro but it is not saved. |
+| `look` | none | A tested look (`looks.py` lists them): adds the styles `title`, `accent`, `big`, `label` and `caption`, and captions use `caption` by default. Spec `styles` with the same name override the look's key by key. |
+| `brand` | look's colors | `{"accent": "#F59E0B", "text": "#FFFFFF", "muted": "#94A3B8"}`: the brand colors the look's styles use. Only with `look`. |
 | `styles` | {} | Named text styles, reused via `"style": "<name>"`. |
 | `video` | required | Main-track clips, in playback order. |
 | `overlays`, `audio`, `texts`, `captions`, `effects`, `filters`, `stickers` | [] | See below. |
@@ -87,6 +89,60 @@ Vertical-video safe zone (platform UI covers the rest): keep text within `y` fro
 | `blend` | Blend mode: `screen`, `overlay`, `multiply`, `soft_light`, `hard_light`, `lighten`, `darken`, `color_dodge`, `color_burn`, `linear_burn`. Meaningful on overlays. |
 | `chroma` | Green screen: `{"color": "#00FF00", "intensity": 20, "shadow": 0}`. |
 | `remove_bg` | `true` turns on CapCut's Remove BG > Auto removal, which cuts the person or main subject out of a video or image. **CapCut Pro feature**: it is rejected unless Pro is allowed. CapCut computes the cutout the first time the draft opens, a few seconds per clip. Below a cutout on the main track there is only black, so to put someone on a new background, place the background on the main track and the person in an overlay with `remove_bg`. |
+
+## Motion presets: enter and exit
+
+`"enter"` and `"exit"` on main clips, overlays and texts (or in a text style) add eased movement as
+keyframes: drafts only hold linear keyframes, so each curve is sampled into several points. A preset
+ends exactly on the item's resting transform (or style position), so the item looks the same as
+without it once it has played. Give a name, or `{"name": "pop", "duration": 0.4}`.
+
+| enter | on | what it does (default length) |
+|---|---|---|
+| `pop` | overlays, texts | scales 1% -> 108% -> 100%; overlays also fade in (0.35 s) |
+| `punch` | overlays, texts | scales 125% -> 100%, a hard hit for a beat (0.25 s) |
+| `rise` | overlays, texts | moves up into place; overlays also fade in (0.35 s) |
+| `drop` | overlays, texts | falls into place and settles (0.4 s) |
+| `slide_left`, `slide_right` | overlays, texts | comes in from the right / left (0.35 s) |
+| `fade` | overlays | opacity 0 -> 1 (0.3 s) |
+| `grow_left`, `grow_right` | overlays | width grows from the left / right edge: bars, underlines (0.45 s) |
+| `slam` | overlays, texts | scale 190% -> 100%: the word hits the screen (0.12 s) |
+| `slam_tilt` | overlays, texts | slam from 210% while untwisting 9 degrees (0.13 s) |
+| `whip_left`, `whip_right` | overlays, texts | flies in from beyond the right / left edge (0.15 s) |
+| `fall`, `jump` | overlays, texts | drops in from above / shoots up from below (0.14 s) |
+| `spin` | overlays, texts | spins in from -120 degrees while growing (0.18 s) |
+
+| exit | on | |
+|---|---|---|
+| `fade` | overlays | opacity to 0 (0.3 s) |
+| `shrink` | overlays, texts | scales to 1% (0.3 s) |
+| `sink` | overlays, texts | moves down; overlays also fade out (0.3 s) |
+| `slide_left`, `slide_right` | overlays, texts | leaves to the left / right (0.3 s) |
+| `zoom_through` | overlays, texts | scales to 14x: the camera flies through the word into the next section (0.26 s) |
+
+Presets combine with `keyframes` and `motion` on the same property: the spec's points inside the
+preset's time window are replaced, and the preset's last (or first) point is moved onto the rest of
+the curve, so a card can pop in and then keep a slow drift. Texts cannot fade with keyframes; pair a
+text `enter` with a catalog `intro` such as `fade_in` when it should also fade.
+
+## Kinetic typography helpers
+
+- `"drift": 0.05` (texts, text styles, overlays): the item keeps growing slowly, scale 1.0 -> 1.05
+  over its whole time on screen, so a held word never looks frozen. Combines with `enter`.
+- `"fit_width": 0.86` (text styles): the size is computed so the longest line is that fraction of
+  the canvas wide, from the font's measured width (`fonts.json`); `size_max` caps it (default 48).
+  Wrapping is turned off unless the style sets `wrap`.
+- `"echo": {"count": 4, "spacing": 0.2, "stagger": 0.08}` (texts): repeats the word above and below
+  itself (`spacing` in half-canvas units), each copy `stagger` seconds later, as an outline (black
+  fill, white stroke; or `"style": "<name>"` / `color` / `stroke` for the copies). `"echo": true`
+  uses those defaults.
+
+## Text fit warnings
+
+`--check` estimates how wide each text line is from its font (`scripts/fonts.json`, measured in
+CapCut) and warns when a line would wrap onto another line or run off the canvas, with the size
+that would fit. The estimate is close for the curated fonts and rough for others; fix the warning by
+shortening the line or splitting it across two text items.
 
 ## overlays
 
@@ -157,6 +213,7 @@ the style.
 | `intro`, `outro` | none | Kinds `text_intro`, `text_outro`; name or `{"name", "duration"}`. |
 | `loop` | none | Kind `text_loop`; runs between intro and outro. |
 | `keyframes` | none | On the text item (not in a style): `x`, `y`, `scale`, `rotation`. |
+| `enter`, `exit` | none | Motion presets (see above): `pop`, `punch`, `rise`, `drop`, `slide_left`, `slide_right`; exits `shrink`, `sink`, `slide_left`, `slide_right`. |
 | `effect_id`, `bubble` | none | Fancy-text / bubble presets by raw CapCut id - see `capcut-notes.md`. |
 
 ## captions

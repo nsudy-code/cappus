@@ -196,8 +196,11 @@ busy backgrounds give rough edges, so name those shots as things to check at han
 - Do not cover faces or the product - check where the subject is in the contact sheet and move text.
 - Language: write text in the language the user wrote in, unless they say otherwise. Check the font
   supports it (many decorative fonts are Latin-only).
-- Good free fonts: `montserrat`, `poppins_bold`, `anton` and `bebas` (condensed, punchy titles),
-  `futura`, `playfair_italic` (elegant), `oswald_light` (thin, cinematic).
+- Fonts: `scripts/fonts.json` lists 50 free fonts picked by looking at every free font rendered in
+  CapCut, each with its role (headline, body, script), moods and width. Pick from it by mood, pair one
+  headline font with one body font, and use script fonts only for one or two accent words. Wide
+  fonts (`bungee`, `resolve`, `marvin`, `brown_volky`, `marker`) need short lines. The looks in
+  `scripts/looks.json` are tested pairings; start from one.
 
 ## Sound
 

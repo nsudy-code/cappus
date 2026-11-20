@@ -148,6 +148,12 @@ def main() -> int:
         notes.append("Optional: captions from speech need faster-whisper: "
                      f'"{sys.executable}" -m pip install -r "{SKILL / "requirements-captions.txt"}"')
 
+    report["website_capture"] = package("playwright", "playwright")
+    if not report["website_capture"]:
+        notes.append("Optional: capturing a website for a promo (site_capture.py) needs Playwright: "
+                     f'"{sys.executable}" -m pip install -r "{SKILL / "requirements-web.txt"}", then '
+                     f'"{sys.executable}" -m playwright install chromium')
+
     report["ready"] = not problems
     report["problems"] = problems
     report["notes"] = notes

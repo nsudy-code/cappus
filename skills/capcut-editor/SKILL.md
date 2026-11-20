@@ -15,8 +15,16 @@ Two things make this work, and both are easy to get wrong without the bundled to
    by an internal CapCut ID. A made-up name ("Cinematic Glow") silently does nothing. The bundled
    catalog holds ~5,000 real resources (~1,200 free, ~3,800 Pro); `build_draft.py` refuses anything
    that is not in it, and anything CapCut is known to no longer load (`<skill>/scripts/unavailable.json`).
-2. **You cannot watch the result.** You never see the render, so taste has to come from looking at the
-   footage first, planning deliberately, and following the craft guidance rather than piling on effects.
+2. **You cannot watch the result** (unless you can use the user's screen, see step 6). Taste has to
+   come from looking at the footage first, planning deliberately, and following the craft guidance
+   rather than piling on effects.
+
+**The first result is what people judge.** Most requests are one line ("make a promo for my
+website", "turn these photos into a reel"). With no footage, the default is **kinetic typography** (look `kinetic`,
+recipe in `references/recipes.md`): huge words on every beat beat a slideshow of screenshots. Do not answer with questions: follow a recipe in
+`references/recipes.md`, start from a tested look (`scripts/looks.py`), generate music on a known
+beat grid when there is none (`scripts/music.py`), and use the eased motion presets. State the
+choices you made in one line.
 
 ## Setup (once per machine)
 
@@ -31,6 +39,10 @@ python -m pip install -r <skill>/requirements.txt    # pycapcut + numpy
 
 Captions from speech need one more, optional package (see step 2):
 `python -m pip install -r <skill>/requirements-captions.txt` (faster-whisper).
+
+Capturing a website (the website-to-promo recipe) needs Playwright:
+`python -m pip install -r <skill>/requirements-web.txt`, then `python -m playwright install chromium`
+(about 150 MB). Ask once before installing it.
 
 `ffmpeg`/`ffprobe` must be on PATH. If `pip` targets a managed Python, create a venv and run the
 scripts with that interpreter. The scripts live in `<skill>/scripts/`. They print JSON, except the
@@ -113,8 +125,21 @@ jump cuts, reordering and speed changes, and words in the parts you cut are left
 
 ### 3. Plan the edit, briefly, then write the spec
 
-Read `references/editing-craft.md` before planning - it has the pacing rules, the per-genre recipes and
-the "which effect for which mood" palette. Sketch a beat sheet (hook, body, payoff, with timestamps),
+Read `references/recipes.md` when the request matches one (a website promo, photos or clips to a
+reel), and `references/editing-craft.md` for everything else - it has the pacing rules, the
+per-genre recipes and the "which effect for which mood" palette.
+
+**Start from a look.** `python <skill>/scripts/looks.py` lists six tested looks (font pairing,
+colors, text styles with motion, card motion, transitions, music mood and BPM); `looks.py <name>`
+shows one. Put `"look": "<name>"` and `"brand": {"accent": "#RRGGBB"}` in the spec and use the
+styles `title`, `accent`, `big`, `label` (captions get `caption`). Other fonts: `scripts/fonts.json`
+has 50 free fonts picked by eye, with roles and moods.
+
+**No music from the user?** Generate it: `python <skill>/scripts/music.py media/music.wav --mood
+hype --bpm 124 --length 30 --drop 4 --breath 16 --end-hit 24` writes the track and
+`music.beats.json` with every beat time. Build cuts and text changes from that file.
+
+Sketch a beat sheet (hook, body, payoff, with timestamps),
 then express it as an edit spec: one JSON file, times in seconds. Save it next to the user's media (or
 in the project folder), because relative `src` paths resolve from the spec's location and the spec is
 what you edit when the user asks for changes.
@@ -150,6 +175,9 @@ How the pieces behave:
   keep text and effects glued to their clip when you retime the cut later.
 - Overlapping items on the same track are moved to an extra lane automatically.
 - Names come from the catalog. Use the English alias or the original CapCut name - both work.
+- `"enter"` / `"exit"` on overlays and texts (`pop`, `punch`, `rise`, `drop`, `slide_left`,
+  `grow_left`, `fade`, ...) give eased motion that lands exactly on the item's resting place. Prefer
+  them to hand-written keyframes; they combine with a slow drift on the same property.
 
 ### 4. Pick resources from the catalog, never from memory
 
@@ -176,8 +204,10 @@ python <skill>/scripts/build_draft.py edit.json           # writes the draft int
 ```
 
 `--check` prints the resolved timeline. Read it: confirm the total duration, that text sits where you
-meant, that nothing runs past the main track, and that `pro_allowed` matches the user's plan. Fix every reported problem and re-check; do not
-remove a feature just to make an error go away without understanding it.
+meant, that nothing runs past the main track, and that `pro_allowed` matches the user's plan. Fix every
+reported problem and re-check; do not remove a feature just to make an error go away without
+understanding it. Treat a text-fit warning (a line that would wrap or run off the canvas) as a bug:
+shorten the line or split it.
 
 To revise after feedback, edit the spec and rebuild with `--overwrite`. It only replaces a draft this
 tool created, and only while the user has not changed it in CapCut: each build stores a fingerprint of
@@ -193,15 +223,23 @@ already counts as a change.
 The draft must not be open in CapCut while you write it. `inspect_draft.py` also reads any draft the
 user made by hand, which is how you pick up sticker / fancy-text ids or learn their editing style.
 
-### 6. Hand over honestly
+### 6. Look at it if you can, then hand over
 
-Tell the user:
+**If computer use is available**, look at the draft in CapCut yourself before handing over: the
+first frame, the text changes and the end card (`references/capcut-notes.md`, "Looking at a draft in
+CapCut"). Fix what you see and rebuild. Say that you checked it this way; otherwise say you have not
+watched the render.
+
+Write the handover for someone who is not an editor: what to open and press, then what they can
+change in one click. Tell the user:
 
 - the draft name, and that it is in CapCut's project list (if CapCut is already open: go back to the
   home screen or restart it so it rescans);
 - a short description of the edit and the reasoning (structure, where the cuts land, what the look is);
-- that you have not watched the render, plus the two or three things most worth eyeballing (text
+- whether you looked at it in CapCut; if not, the two or three things most worth eyeballing (text
   size/position, a specific transition, music level against speech);
+- when the music was generated by `music.py`: that it is free to use, and that a CapCut library
+  track at the same BPM keeps the sync;
 - anything you could not do in the draft and how to do it in CapCut in one click
   (see `references/capcut-notes.md`);
 - if the build report lists `pro_resources`: that the draft uses Pro items (name them) and the
@@ -242,6 +280,8 @@ The full guidance is in `references/editing-craft.md`. The rules that matter mos
 
 - `references/edit-spec.md` - every field of the spec, units, coordinate system, examples. Read it when
   writing anything beyond the minimal shape above.
+- `references/recipes.md` - one-line requests to a finished edit: website to promo video (with
+  `site_capture.py`), photos or clips to a beat-synced reel, on-screen text, the plain-words handover.
 - `references/editing-craft.md` - pacing, genre recipes (talking head, beat-synced montage, cinematic
   vlog, product promo, photo slideshow), and the effect/transition/filter palette by mood, with a
   separate Pro palette for CapCut Pro users.

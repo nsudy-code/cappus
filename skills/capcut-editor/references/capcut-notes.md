@@ -164,6 +164,26 @@ an uncurated animation is fine as long as the builder accepts it.
 
 `unavailable.json` is part of the skill, so commit it to share the result with the team.
 
+## Looking at a draft in CapCut
+
+With computer use, Claude can look at the finished draft before handing it over. This is the
+procedure that worked with CapCut 9.8 on Windows:
+
+1. Ask for access to CapCut (`request_access` with "CapCut"; if the window stays hidden, also the
+   process name the screenshot note gives, such as `capcut.exe`, and "File Explorer" to click its
+   taskbar icon, which brings the window to the front).
+2. Click the draft on the home screen and wait for "Interface is being loaded" to finish (a draft
+   with many fonts or effects takes up to a minute while CapCut downloads them).
+3. Click the full-screen button at the bottom right of the player. In full screen, `Home` jumps to
+   the start and `Right` steps one frame, so `Right` x 30 at 30 fps is one second.
+4. Zoom into the picture (the middle column of the screen) at the moments that matter: the first
+   frame, every text change worth checking, the end card. Look for lines that wrap or touch a card,
+   text outside the safe zone, and anything that reads as a mistake.
+5. Press `Escape` and leave the draft (back to the home screen) before rebuilding: `--overwrite`
+   refuses while the draft is open.
+
+Fix what you see in the spec, rebuild, and look again only at the moments you changed.
+
 ## Troubleshooting
 
 | symptom | cause and fix |
