@@ -1,5 +1,5 @@
 {
- "_about": "Looks: tested combinations of fonts, colors, text styles and motion, so an edit looks designed from the first build. A spec uses one with \"look\": \"<name>\" (and \"brand\" for its colors). The builder adds the look's styles (title, accent, big, label, caption); styles in the spec with the same name override them key by key. Colors: $text, $accent and $muted are replaced by spec.brand, else by the look's own colors. Everything else here (cards, transitions, hit, filter, pace, music) is guidance for whoever writes the spec. All items are free CapCut resources.",
+ "_about": "Looks: tested combinations of fonts, colors, text styles and motion, so an edit looks designed from the first build. A spec uses one with \"look\": \"<name>\" (and \"brand\" for its colors). The builder adds the look's styles (title, accent, big, label, caption); styles in the spec with the same name override them key by key. Colors: $text, $accent and $muted are replaced by spec.brand, else by the look's own colors. Everything else here (cards, transitions, hit, filter, pace, music) is guidance for whoever writes the spec. All items are free CapCut resources. pairings: other tested font pairings for the look; looks.py suggest picks one to fit the footage and theme and to differ from the last edits, and the spec's \"fonts\" applies it (sizes are adjusted to each font's width).",
  "looks": {
   "bold_promo": {
    "description": "Loud and punchy: condensed heavy headlines that hit on every beat. Ads, sales, product launches, gyms, events.",
@@ -17,25 +17,41 @@
     "title": {
      "font": "anton",
      "size": 15,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": "punch"
     },
     "accent": {
      "font": "anton",
      "size": 20,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "enter": "punch"
     },
     "big": {
      "font": "anton",
-     "size": 30,
-     "color": "$accent",
-     "enter": "pop"
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
+     "enter": "pop",
+     "size_max": 30,
+     "fit_width": 0.82,
+     "wrap": false
     },
     "label": {
      "font": "poppins_bold",
      "size": 7,
-     "color": "$muted",
+     "color": [
+      "$muted",
+      "auto"
+     ],
      "intro": {
       "name": "reveal_up",
       "duration": 0.3
@@ -69,7 +85,44 @@
    "music": {
     "mood": "hype",
     "bpm": 124
-   }
+   },
+   "pairings": [
+    {
+     "headline": "anton",
+     "body": "poppins_bold",
+     "mood": "condensed and loud",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "resolve",
+     "body": "poppins_bold",
+     "mood": "wide and heavy",
+     "energy": "high",
+     "light": "any"
+    },
+    {
+     "headline": "bungee",
+     "body": "rubik_bold",
+     "mood": "chunky and friendly",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "chunkfive",
+     "body": "montserrat",
+     "mood": "slab, a little retro",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "jumper",
+     "body": "poppins_bold",
+     "mood": "round and punchy",
+     "energy": "high",
+     "light": "any"
+    }
+   ]
   },
   "clean_tech": {
    "description": "Calm and modern: geometric sans, text that rises into place, soft slides. SaaS, websites, agencies, apps, explainers.",
@@ -88,27 +141,43 @@
      "font": "poppins_bold",
      "size": 12,
      "bold": true,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": "rise"
     },
     "accent": {
      "font": "poppins_bold",
      "size": 15,
      "bold": true,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "enter": "rise"
     },
     "big": {
      "font": "poppins_bold",
-     "size": 22,
      "bold": true,
-     "color": "$accent",
-     "enter": "pop"
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
+     "enter": "pop",
+     "size_max": 22,
+     "fit_width": 0.82,
+     "wrap": false
     },
     "label": {
      "font": "poppins_bold",
      "size": 8,
-     "color": "$muted",
+     "color": [
+      "$muted",
+      "auto"
+     ],
      "intro": {
       "name": "reveal_up",
       "duration": 0.3
@@ -143,70 +212,120 @@
    "music": {
     "mood": "corporate",
     "bpm": 112
-   }
+   },
+   "pairings": [
+    {
+     "headline": "poppins_bold",
+     "body": "poppins_bold",
+     "mood": "safe geometric",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "sequel_wide",
+     "body": "dm_sans_italic",
+     "mood": "wide tech",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "marvin",
+     "body": "kilig",
+     "mood": "minimal wide caps",
+     "energy": "low",
+     "light": "any"
+    },
+    {
+     "headline": "rubik_bold",
+     "body": "nunito",
+     "mood": "friendly product",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "montserrat",
+     "body": "kilig",
+     "mood": "corporate clean",
+     "energy": "low",
+     "light": "any"
+    }
+   ]
   },
   "cinematic": {
-   "description": "Slow and grand: wide-tracked classical capitals, fades and dissolves, a film look. Travel, brand stories, real estate, documentaries.",
+   "description": "Bold travel-reel type over footage: huge condensed Anton headlines in white with a clean Poppins label, no shadows, slow fades and dissolves. Travel, trips, events, brand stories, property, any footage that is the star.",
    "fonts": {
-    "headline": "cinzel",
-    "body": "futura"
+    "headline": "anton",
+    "body": "poppins_bold"
    },
    "colors": {
     "text": "#F5F1E8",
-    "accent": "#E8C27A",
+    "accent": "#FFFFFF",
     "muted": "#B9B2A3",
     "background": "#07070A"
    },
    "styles": {
     "title": {
-     "font": "cinzel",
-     "size": 12,
-     "letter_spacing": 4,
-     "color": "$text",
-     "intro": {
-      "name": "blur_in",
-      "duration": 0.6
-     }
-    },
-    "accent": {
-     "font": "cinzel",
-     "size": 15,
-     "letter_spacing": 4,
-     "color": "$accent",
-     "intro": {
-      "name": "blur_in",
-      "duration": 0.6
-     }
-    },
-    "big": {
-     "font": "cinzel",
-     "size": 22,
-     "letter_spacing": 6,
-     "color": "$text",
-     "intro": {
-      "name": "blur_in",
-      "duration": 0.8
-     }
-    },
-    "label": {
-     "font": "futura",
-     "size": 7,
-     "letter_spacing": 2,
-     "color": "$muted",
+     "font": "anton",
+     "size": 26,
+     "color": [
+      "$text",
+      "auto"
+     ],
      "intro": {
       "name": "fade_in",
+      "duration": 0.4
+     },
+     "drift": 0.03
+    },
+    "accent": {
+     "font": "anton",
+     "size": 30,
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
+     "intro": {
+      "name": "fade_in",
+      "duration": 0.4
+     },
+     "drift": 0.03
+    },
+    "big": {
+     "font": "anton",
+     "color": [
+      "$text",
+      "auto"
+     ],
+     "intro": {
+      "name": "blur_in",
       "duration": 0.5
+     },
+     "drift": 0.03,
+     "size_max": 40,
+     "fit_width": 0.82,
+     "wrap": false
+    },
+    "label": {
+     "font": "poppins_bold",
+     "size": 8,
+     "color": [
+      "$text",
+      "auto"
+     ],
+     "intro": {
+      "name": "fade_in",
+      "duration": 0.4
      }
     },
     "caption": {
-     "font": "futura",
-     "size": 8,
+     "font": "poppins_bold",
+     "size": 9,
+     "bold": true,
      "color": "$text",
-     "shadow": {
+     "stroke": {
       "color": "#000000",
-      "opacity": 0.8,
-      "blur": 20,
-      "distance": 3
+      "width": 25
      }
     }
    },
@@ -227,7 +346,58 @@
    "music": {
     "mood": "cinematic",
     "bpm": 90
-   }
+   },
+   "pairings": [
+    {
+     "headline": "anton",
+     "body": "poppins_bold",
+     "mood": "bold travel reel",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "bebas",
+     "body": "kilig",
+     "mood": "clean and airy",
+     "energy": "any",
+     "light": "day"
+    },
+    {
+     "headline": "coda_heavy",
+     "body": "playfair_italic",
+     "mood": "heavy type against a soft italic",
+     "energy": "high",
+     "light": "any"
+    },
+    {
+     "headline": "didot",
+     "body": "giveny",
+     "mood": "quiet and elegant",
+     "energy": "low",
+     "light": "golden"
+    },
+    {
+     "headline": "sequel_wide",
+     "body": "dm_sans_italic",
+     "mood": "wide and modern",
+     "energy": "high",
+     "light": "day"
+    },
+    {
+     "headline": "gloock",
+     "body": "kilig",
+     "mood": "editorial serif",
+     "energy": "low",
+     "light": "any"
+    },
+    {
+     "headline": "marvin",
+     "body": "futura",
+     "mood": "wide geometric, cool",
+     "energy": "low",
+     "light": "night"
+    }
+   ]
   },
   "playful": {
    "description": "Bouncy and bright: rounded heavy letters that pop in, quick bounces. Kids, food, cafes, pets, fun social posts.",
@@ -264,19 +434,24 @@
     },
     "big": {
      "font": "funny_cute",
-     "size": 18,
      "color": "$accent",
      "stroke": {
       "color": "#1B1035",
       "width": 45
      },
-     "enter": "drop"
+     "enter": "drop",
+     "size_max": 18,
+     "fit_width": 0.82,
+     "wrap": false
     },
     "label": {
      "font": "nunito",
      "size": 8,
      "bold": true,
-     "color": "$muted",
+     "color": [
+      "$muted",
+      "auto"
+     ],
      "enter": "rise"
     },
     "caption": {
@@ -307,7 +482,44 @@
    "music": {
     "mood": "hype",
     "bpm": 126
-   }
+   },
+   "pairings": [
+    {
+     "headline": "funny_cute",
+     "body": "nunito",
+     "mood": "rounded and bold",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "fredoka",
+     "body": "nunito",
+     "mood": "soft and friendly",
+     "energy": "low",
+     "light": "any"
+    },
+    {
+     "headline": "dynapuff",
+     "body": "rubik_bold",
+     "mood": "bubbly",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "bangers",
+     "body": "nunito",
+     "mood": "comic",
+     "energy": "high",
+     "light": "any"
+    },
+    {
+     "headline": "chunky_marker",
+     "body": "fredoka",
+     "mood": "hand-drawn",
+     "energy": "high",
+     "light": "any"
+    }
+   ]
   },
   "luxury": {
    "description": "Quiet and expensive: a fashion serif over thin capitals, slow rises, gold on black. Fashion, jewelry, hotels, property, salons.",
@@ -324,9 +536,12 @@
    "styles": {
     "title": {
      "font": "didot",
-     "size": 13,
+     "size": 15,
      "letter_spacing": 2,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": {
       "name": "rise",
       "duration": 0.7
@@ -334,9 +549,13 @@
     },
     "accent": {
      "font": "didot",
-     "size": 16,
+     "size": 17,
      "letter_spacing": 2,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "enter": {
       "name": "rise",
       "duration": 0.7
@@ -344,19 +563,28 @@
     },
     "big": {
      "font": "didot",
-     "size": 24,
      "letter_spacing": 3,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "intro": {
       "name": "fade_in",
       "duration": 0.8
-     }
+     },
+     "size_max": 28,
+     "fit_width": 0.82,
+     "wrap": false
     },
     "label": {
      "font": "giveny",
-     "size": 7,
+     "size": 8,
      "letter_spacing": 4,
-     "color": "$muted",
+     "color": [
+      "$muted",
+      "auto"
+     ],
      "intro": {
       "name": "fade_in",
       "duration": 0.6
@@ -367,11 +595,9 @@
      "size": 8,
      "letter_spacing": 2,
      "color": "$text",
-     "shadow": {
+     "stroke": {
       "color": "#000000",
-      "opacity": 0.8,
-      "blur": 20,
-      "distance": 3
+      "width": 25
      }
     }
    },
@@ -394,7 +620,44 @@
    "music": {
     "mood": "chill",
     "bpm": 88
-   }
+   },
+   "pairings": [
+    {
+     "headline": "didot",
+     "body": "giveny",
+     "mood": "fashion serif",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "vogue",
+     "body": "prata",
+     "mood": "magazine",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "brown_volky",
+     "body": "futura",
+     "mood": "extra-wide luxe caps",
+     "energy": "low",
+     "light": "any"
+    },
+    {
+     "headline": "gloock",
+     "body": "giveny",
+     "mood": "editorial",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "modern_serif",
+     "body": "kilig",
+     "mood": "modern display serif",
+     "energy": "any",
+     "light": "any"
+    }
+   ]
   },
   "street": {
    "description": "Fast and raw: brushed italic capitals that slide in, whips and glitches. Sport, streetwear, gaming, automotive, music.",
@@ -412,26 +675,42 @@
     "title": {
      "font": "facon",
      "size": 12,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": "slide_right"
     },
     "accent": {
      "font": "facon",
      "size": 14,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "enter": "slide_right"
     },
     "big": {
      "font": "facon",
-     "size": 20,
-     "color": "$accent",
-     "enter": "punch"
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
+     "enter": "punch",
+     "size_max": 20,
+     "fit_width": 0.82,
+     "wrap": false
     },
     "label": {
      "font": "bebas",
      "size": 9,
      "letter_spacing": 2,
-     "color": "$muted",
+     "color": [
+      "$muted",
+      "auto"
+     ],
      "enter": "rise"
     },
     "caption": {
@@ -461,7 +740,37 @@
    "music": {
     "mood": "hype",
     "bpm": 128
-   }
+   },
+   "pairings": [
+    {
+     "headline": "facon",
+     "body": "bebas",
+     "mood": "brushed speed",
+     "energy": "high",
+     "light": "any"
+    },
+    {
+     "headline": "sport_italic",
+     "body": "bebas",
+     "mood": "sport condensed",
+     "energy": "high",
+     "light": "any"
+    },
+    {
+     "headline": "stencil",
+     "body": "bebas",
+     "mood": "stencil, gaming",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "chunky_marker",
+     "body": "anton",
+     "mood": "marker",
+     "energy": "high",
+     "light": "any"
+    }
+   ]
   },
   "kinetic": {
    "description": "Full-screen kinetic typography: one or two huge words per beat on black, heavy wide capitals against a light italic serif, every word slamming, whipping or spinning in and breathing while it holds. The most striking promo with no footage at all: websites, services, launches, announcements.",
@@ -480,7 +789,10 @@
      "font": "coda_heavy",
      "fit_width": 0.86,
      "size_max": 40,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": "slam",
      "drift": 0.05
     },
@@ -488,7 +800,10 @@
      "font": "coda_heavy",
      "fit_width": 0.86,
      "size_max": 40,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": "slam_tilt",
      "drift": 0.05
     },
@@ -496,7 +811,11 @@
      "font": "coda_heavy",
      "fit_width": 0.86,
      "size_max": 40,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "enter": "slam",
      "drift": 0.05
     },
@@ -504,7 +823,10 @@
      "font": "playfair_italic",
      "fit_width": 0.62,
      "size_max": 26,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "intro": {
       "name": "wave_in",
       "duration": 0.3
@@ -514,7 +836,10 @@
     "letter": {
      "font": "coda_heavy",
      "size": 44,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": "slam_tilt",
      "drift": 0.05
     },
@@ -530,7 +855,10 @@
     "title": {
      "font": "coda_heavy",
      "size": 13,
-     "color": "$text",
+     "color": [
+      "$text",
+      "auto"
+     ],
      "enter": "slam",
      "drift": 0.05
     },
@@ -538,7 +866,11 @@
      "font": "coda_heavy",
      "fit_width": 0.8,
      "size_max": 30,
-     "color": "$accent",
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
      "intro": {
       "name": "wave_in",
       "duration": 0.35
@@ -548,7 +880,10 @@
     "label": {
      "font": "playfair_italic",
      "size": 8,
-     "color": "$muted",
+     "color": [
+      "$muted",
+      "auto"
+     ],
      "intro": {
       "name": "typewriter",
       "duration": 0.3
@@ -579,7 +914,44 @@
    "music": {
     "mood": "hype",
     "bpm": 92
-   }
+   },
+   "pairings": [
+    {
+     "headline": "coda_heavy",
+     "body": "playfair_italic",
+     "mood": "heavy caps against a soft italic",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "resolve",
+     "body": "playfair_italic",
+     "mood": "wider and heavier caps",
+     "energy": "high",
+     "light": "any"
+    },
+    {
+     "headline": "anton",
+     "body": "didot",
+     "mood": "tall condensed caps with a fashion serif",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "bungee",
+     "body": "kaushan",
+     "mood": "chunky caps with a brush script",
+     "energy": "high",
+     "light": "any"
+    },
+    {
+     "headline": "marvin",
+     "body": "playfair_italic",
+     "mood": "wide geometric caps, calmer",
+     "energy": "low",
+     "light": "any"
+    }
+   ]
   }
  }
 }

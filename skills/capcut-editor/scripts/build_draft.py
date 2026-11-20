@@ -30,6 +30,7 @@ from pathlib import Path
 from _common import (BACKUPS_KEPT, BUILD_FILE, MARKER, TIMELINE_ID, SpecError, backups_dir, cc, edit_check,
                      find_drafts_dir, label, param_names, resolve, signature_hash, timeline_signature, user_tier)
 
+import contrast
 import looks as looks_mod
 import motion
 from _common import font_width
@@ -43,7 +44,7 @@ DRAFT_DIR_TOKEN = "##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80
 VISUAL_KEYS = {
     "id", "src", "in", "out", "duration", "speed", "volume", "mute", "fit", "background", "transform",
     "keyframes", "motion", "intro", "outro", "combo", "filter", "effects", "mask", "blend", "chroma",
-    "remove_bg", "fade", "enter", "exit", "drift", "note",
+    "remove_bg", "fade", "enter", "exit", "drift", "adjust", "note",
 }
 MAIN_KEYS = VISUAL_KEYS | {"transition"}
 OVERLAY_KEYS = VISUAL_KEYS | {"at", "end", "track"}
@@ -69,7 +70,7 @@ _PUNCT = re.compile(r"(?<!\d)[.,!?;:…。，、！？]+|[.,!?;:…]+(?!\d)")
 FX_KEYS = {"name", "at", "end", "duration", "params", "track", "note"}
 FILTER_KEYS = {"name", "at", "end", "duration", "intensity", "track", "note"}
 STICKER_KEYS = {"resource_id", "at", "end", "duration", "transform", "track", "keyframes", "note"}
-TOP_KEYS = {"name", "width", "height", "fps", "allow_pro", "look", "brand", "styles", "video", "overlays", "audio",
+TOP_KEYS = {"name", "width", "height", "fps", "allow_pro", "look", "brand", "fonts", "styles", "video", "overlays", "audio",
             "texts", "captions", "effects", "filters", "stickers", "note"}
 LIST_KEYS = ("video", "overlays", "audio", "texts", "effects", "filters", "stickers")
 
@@ -247,20 +248,26 @@ class Builder:
         self._track_count: dict = {}
         self.styles = self.resolve_styles(spec)
         self._fit_warned: set = set()
+        self.main_clips: list = []  # what plays on the main track, for the contrast check
+        self._picked: list = []      # (start, white or dark) chosen so far, to keep pairs alike
+        self._scrim = False
+        self._scrims: list = []      # (start, end, y) already dimmed
+        self.notes: list = []        # things the builder decided for you, for the report
 
     # ---------- looks, motion presets, text fit ----------
     @staticmethod
     def resolve_styles(spec) -> dict:
         """The look's styles (if the spec names a look), overridden key by key by spec.styles."""
         own = spec.get("styles") or {}
-        if "brand" in spec and not spec.get("look"):
-            raise SpecError("spec.brand only applies together with spec.look")
+        for key in ("brand", "fonts"):
+            if key in spec and not spec.get("look"):
+                raise SpecError(f"spec.{key} only applies together with spec.look")
         if not spec.get("look"):
             return own
         if not isinstance(spec["look"], str):
             raise SpecError("spec.look must be the name of a look (run looks.py to list them)")
         try:
-            merged = looks_mod.styles(spec["look"], spec.get("brand"))
+            merged = looks_mod.styles(spec["look"], spec.get("brand"), spec.get("fonts"))
         except looks_mod.LookError as e:
             raise SpecError(str(e))
         for name, st in own.items():
@@ -290,6 +297,129 @@ class Builder:
                 kf[prop] = motion.merge(sorted(base), added, window, build)
         return kf
 
+    def text_color(self, text, st, start, dur, ctx):
+        """Resolve "color": "auto" and warn when the text color washes into the footage behind it."""
+        color = st.get("color", "#FFFFFF")
+        if isinstance(color, list):  # a preference order: the first that reads, "auto" = white or dark
+            return self.pick_color(text, st, start, dur, ctx, color)
+        t = (start + min(400_000, dur // 2)) / 1e6  # after a fade-in or a transition has settled
+        clip = next((c for c in self.main_clips if c["start"] <= t < c["end"]), None)
+        pixels = None
+        if clip is not None:
+            member = self.res("font", st["font"]) if st.get("font") else None
+            k, caps_only = font_width(member) if member is not None else (2.6, False)
+            lines = str(text).split("\n")
+            size = float(st.get("size", 8)) * float(st.get("scale", 1.0))
+            longest = max(lines, key=len)
+            caps = longest.upper() == longest and not caps_only
+            box_w = min(self.width, len(longest) * k * size * (1.15 if caps else 1.0) * self.width / 1080)
+            box_h = size * 5 * len(lines) * self.height / 1920
+            pixels = contrast.behind(clip, t, (self.width, self.height), float(st.get("x", 0)), float(st.get("y", 0)),
+                                     box_w, box_h)
+        if pixels is None:
+            return contrast.WHITE if color == "auto" else color
+        guarded = (st.get("stroke") or {}).get("width", 0) >= 20 or bool(st.get("background"))
+        if color == "auto":
+            best = contrast.judge(pixels, contrast.WHITE)[1]
+            score = contrast.judge(pixels, best)[0]
+            if score < contrast.READABLE and not guarded:
+                self.warnings.append(f"{ctx}: '{str(text)[:24]}' has no readable color at {t:.1f}s (best {score:.1f}:1 "
+                                     "against the footage behind it); move it to the shot's calmer band (text_y) "
+                                     "or give it a stroke.")
+            return best
+        try:
+            score = contrast.judge(pixels, color)[0]
+        except (ValueError, IndexError):
+            return color
+        if score < contrast.READABLE and not guarded:
+            best = contrast.judge(pixels, contrast.WHITE)[1]
+            self.warnings.append(f"{ctx}: '{str(text)[:24]}' in {color} is {score:.1f}:1 against the footage behind it "
+                                 f"at {t:.1f}s, too low to read (aim for 3:1 or more). Use \"color\": \"auto\" "
+                                 f"({best} here), another accent, a stroke, or move it to the shot's text_y.")
+        return color
+
+    def pick_color(self, text, st, start, dur, ctx, prefs):
+        """The first color in prefs that reaches 3:1 against the footage behind the text."""
+        if not prefs or not all(isinstance(c, str) for c in prefs):
+            raise SpecError(f"{ctx}.color: a list must hold colors ('#RRGGBB') or \"auto\"")
+        for c in prefs:
+            if c != "auto":
+                hex_rgb(c, f"{ctx}.color")
+        pixels = self._behind(text, st, start, dur)
+        if pixels is None:
+            return next((c for c in prefs if c != "auto"), contrast.WHITE)
+        # a text that comes in with another (a title and its label) keeps the same light or dark color
+        partner = next((c for t0, c in reversed(self._picked) if abs(t0 - start) <= 1_200_000), None)
+        if partner and partner in (contrast.WHITE, contrast.DARK) and "auto" in prefs:
+            light = contrast.luminance(contrast.hex_rgb(partner)) > 0.4
+            same = next((c for c in prefs if c != "auto" and (contrast.luminance(contrast.hex_rgb(c)) > 0.4) == light),
+                        partner)
+            if contrast.judge(pixels, same)[0] >= 2.5:
+                self._picked.append((start, same))
+                return same
+        scored = []
+        for c in prefs:
+            c = contrast.judge(pixels, contrast.WHITE)[1] if c == "auto" else c
+            score = contrast.judge(pixels, c)[0]
+            if score >= contrast.READABLE:
+                self._picked.append((start, contrast.WHITE if contrast.luminance(contrast.hex_rgb(c)) > 0.4 else contrast.DARK))
+                return c
+            scored.append((score, c))
+        score, best = max(scored)
+        guarded = (st.get("stroke") or {}).get("width", 0) >= 20 or bool(st.get("background"))
+        if not guarded:
+            if score >= 1.6 and contrast.luminance(contrast.hex_rgb(best)) > 0.4:
+                # busy footage under light text: dim just that band with a soft gradient (a scrim);
+                # no outline and no drop shadow, both look cheap on footage
+                self._scrim = True
+                self.notes.append(f"{ctx}: '{str(text)[:24]}' sits on busy footage ({score:.1f}:1), so a soft dark "
+                                  "gradient dims the band behind it; a calmer band (text_y) would need none.")
+            else:
+                self.warnings.append(f"{ctx}: '{str(text)[:24]}' has no readable color here (best {best}, {score:.1f}:1 "
+                                     "against the footage behind it); move it to the shot's calmer band (text_y).")
+        return best
+
+    def add_scrim(self, st, start, dur, ctx):
+        """A soft black gradient (transparent - 45% - transparent) across the canvas behind a text."""
+        y = float(st.get("y", 0))
+        end = start + dur
+        # one scrim covers a title and the line that comes with it (it is 0.75 canvas-halves tall)
+        if any(a - 1_200_000 <= start <= b and abs(y - yy) < 0.3 for a, b, yy in self._scrims):
+            return
+        path = self.base / "cappus_assets" / "scrim.png"
+        if not path.is_file():
+            import numpy as np
+            from PIL import Image
+            path.parent.mkdir(exist_ok=True)
+            h = 720
+            t = np.linspace(-1, 1, h)
+            alpha = (0.45 * (np.cos(np.clip(t, -1, 1) * np.pi) + 1) / 2 * 255).astype(np.uint8)
+            img = np.zeros((h, 1080, 4), np.uint8)
+            img[..., 3] = alpha[:, None]
+            Image.fromarray(img, "RGBA").save(path)
+        item = {"src": str(path), "duration": dur / 1e6, "transform": {"y": y}, "enter": "fade", "exit": "fade"}
+        seg = self.make_video(item, start, f"{ctx}.scrim")
+        self.decorate_video(seg, item, f"{ctx}.scrim", False)
+        track = self.place(cc.TrackType.video, "scrim", seg.target_timerange)
+        self.script.add_segment(seg, track)
+        self._scrims.append((start, end, y))
+
+    def _behind(self, text, st, start, dur):
+        t = (start + min(400_000, dur // 2)) / 1e6
+        clip = next((c for c in self.main_clips if c["start"] <= t < c["end"]), None)
+        if clip is None:
+            return None
+        member = self.res("font", st["font"]) if st.get("font") else None
+        k, caps_only = font_width(member) if member is not None else (2.6, False)
+        lines = str(text).split("\n")
+        size = float(st.get("size", 8)) * float(st.get("scale", 1.0))
+        longest = max(lines, key=len)
+        caps = longest.upper() == longest and not caps_only
+        box_w = min(self.width, len(longest) * k * size * (1.15 if caps else 1.0) * self.width / 1080)
+        box_h = size * 5 * len(lines) * self.height / 1920
+        return contrast.behind(clip, t, (self.width, self.height), float(st.get("x", 0)), float(st.get("y", 0)),
+                               box_w, box_h)
+
     def check_fit(self, text, st, member, ctx):
         """Warn once per item when a line is likely wider than the wrap width (it would wrap onto an
         extra line) or than the canvas. Widths are estimates from fonts.json, measured in CapCut."""
@@ -297,7 +427,9 @@ class Builder:
             return
         k, caps_only = font_width(member) if member is not None else (2.6, False)
         size = float(st.get("size", 8)) * float(st.get("scale", 1.0))
-        spacing = float(st.get("letter_spacing", 0)) * 0.6 * size / 10  # CapCut units, roughly
+        # CapCut letter spacing adds about 0.42 x size px per unit per character (measured in CapCut 9.8:
+        # Cinzel "SUMMER" at size 26 / spacing 6 fit one line, "NEXT SUMMER" at 18 / 4 wrapped)
+        spacing = float(st.get("letter_spacing", 0)) * 0.42 * size
         wrap = st.get("wrap", 0.82)
         limit = (0.82 if wrap is True else float(wrap or 0)) * self.width
         for line in str(text).split("\n"):
@@ -307,7 +439,7 @@ class Builder:
                 fit = size * limit / px
                 self.warnings.append(f"{ctx}: '{line[:30]}' is about {int(px)} px wide at size {size:g}, wider than "
                                      f"the {int(limit)} px wrap width, so it wraps onto another line. Shorten it or "
-                                     f"use size {fit:.0f} or less.")
+                                     f"use size {int(fit * 10) / 10:g} or less.")
                 self._fit_warned.add(ctx)
                 return
             if not limit and px > 0.95 * self.width:
@@ -652,10 +784,26 @@ class Builder:
                          us(num(fd.get("out", 0), f"{ctx}.fade.out", lo=0)))
         kf = dict(c.get("keyframes") or {})
         if c.get("motion"):
+            tr0 = c.get("transform") or {}
+            off = {"x": float(tr0.get("x", 0)), "y": float(tr0.get("y", 0))}
+            sc0 = float(tr0.get("scale", 1.0))
             for prop, pts in self.motion_keyframes(c["motion"], dur, ctx).items():
                 if prop in kf:
                     raise SpecError(f"{ctx}: motion preset and keyframes both animate '{prop}'; keep only one")
+                # the move happens around the clip's own transform (a reframed or scaled clip keeps it)
+                if prop in off:
+                    pts = [[t, v + off[prop]] for t, v in pts]
+                elif prop == "scale":
+                    pts = [[t, v * sc0] for t, v in pts]
                 kf[prop] = pts
+        if c.get("adjust"):  # a constant color correction: brightness / contrast / saturation, -1..1
+            adj = c["adjust"]
+            check_keys(adj, {"brightness", "contrast", "saturation"}, f"{ctx}.adjust")
+            for prop, v in adj.items():
+                if prop in kf:
+                    raise SpecError(f"{ctx}: adjust and keyframes both set '{prop}'; keep only one")
+                v = num(v, f"{ctx}.adjust.{prop}", lo=-1, hi=1)
+                kf[prop] = [[0, v], [dur / 1_000_000, v]]
         tr = c.get("transform") or {}
         s = float(tr.get("scale_x", tr.get("scale", 1.0)))
         if c.get("drift") and "scale" not in kf and not c.get("motion"):
@@ -701,6 +849,11 @@ class Builder:
                 check_keys(c, MAIN_KEYS, ctx)
                 seg = self.make_video(c, cursor, ctx)
                 segs.append((seg, c, ctx))
+                self.main_clips.append({
+                    "src": seg._mat.path, "in": seg.source_timerange.start / 1e6, "start": cursor / 1e6,
+                    "end": (cursor + seg.duration) / 1e6, "speed": float(c.get("speed", 1.0)),
+                    "photo": seg._mat.material_type == "photo", "fit": c.get("fit") or "contain",
+                    "tx": float((c.get("transform") or {}).get("x", 0)), "w": seg._mat.width, "h": seg._mat.height})
                 self.register(c, "clip", cursor, seg.duration, track, Path(seg._mat.path).name)
                 cursor += seg.duration
             except ITEM_ERRORS as e:
@@ -850,6 +1003,8 @@ class Builder:
         align = {"left": 0, "center": 1, "right": 2}.get(st.get("align", "center"))
         if align is None:
             raise SpecError(f"{ctx}: align must be left, center or right")
+        if isinstance(st.get("color"), list):
+            st = dict(st, color=next((c for c in st["color"] if c != "auto"), "#FFFFFF"))
         wrap = st.get("wrap", 0.82)
         if wrap is True:
             wrap = 0.82
@@ -964,7 +1119,8 @@ class Builder:
         k, caps_only = font_width(member) if member is not None else (2.6, False)
         line = max(str(text).split("\n"), key=len)
         caps = line.upper() == line and any(ch.isalpha() for ch in line) and not caps_only
-        size = fit * 1080 / max(1, len(line)) / (k * (1.15 if caps else 1.0))
+        per_char = k * (1.15 if caps else 1.0) + float(st.get("letter_spacing", 0)) * 0.42
+        size = fit * 1080 / max(1, len(line)) / per_char
         return round(min(size, num(st.get("size_max", 48), f"{ctx}.size_max", above=0)), 1)
 
     def build_texts(self):
@@ -985,6 +1141,10 @@ class Builder:
                 if st.get("fit_width"):
                     st = dict(st, size=self.fit_size(item["text"], st, ctx))
                     st.setdefault("wrap", False)
+                self._scrim = False
+                st = dict(st, color=self.text_color(item["text"], st, start, dur, ctx))
+                if self._scrim:
+                    self.add_scrim(st, start, dur, ctx)
                 seg = self.make_text(item["text"], start, dur, st, ctx)
                 kf = dict(item.get("keyframes") or {})
                 sc = float(st.get("scale", 1.0))
@@ -1237,6 +1397,7 @@ class Builder:
             **({"pro_note": "Exporting this draft needs CapCut Pro on the account that exports it."}
                if pro else {}),
             "warnings": self.warnings,
+            **({"notes": self.notes} if self.notes else {}),
         }
 
 

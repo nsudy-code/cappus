@@ -195,6 +195,9 @@ timing so the first draft already looks designed:
   makes a kinetic-typography promo (huge words on every beat) or a version with phone screenshots
   of the site.
 - **"Turn these photos into a reel"**: cuts on the beat, motion on every photo, a few strong lines.
+- **"Make these clips into one video"**: Claude sorts a whole folder like an editor (sharp, steady,
+  well-lit shots first, duplicates and bad takes out), picks the best seconds of each, tells the story
+  in the right order, matches the colors, and reframes horizontal footage around the action.
 - **Looks**: seven tested styles (`kinetic`, `bold_promo`, `clean_tech`, `cinematic`, `playful`,
   `luxury`, `street`), each a font pairing, colors, text animation and music mood. Your brand color
   is used automatically.
@@ -271,6 +274,7 @@ JSON and has `--help`.
 | `doctor.py` | Check the setup: Python, packages, ffmpeg, CapCut desktop and its drafts folder |
 | `looks.py` | List the looks (font pairing, colors, motion, music) or show one |
 | `music.py` | Generate a free music bed with an exact beat map |
+| `scan_footage.py` | Sort a folder of footage: shots, quality scores, duplicates, best windows, color matching, reframing |
 | `site_capture.py` | Screenshot a website on a phone and extract its text, prices, contacts and colors (needs Playwright) |
 | `check_resources.py` | Find catalog items CapCut can no longer load |
 

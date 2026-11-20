@@ -26,6 +26,7 @@ One JSON object. All times are **seconds**. Unknown keys are rejected (typos get
 | `fps` | 30 | Match the footage when it is consistently 24/25/60. CapCut projects run at 24, 25, 30, 50 or 60; any other value (29.97, 59.94) is rounded to the nearest with a warning. |
 | `allow_pro` | user's plan | Omit it normally: Pro is then allowed exactly when the user's saved plan is Pro (`tier.py`). Set `false` to force a free-only draft (e.g. it will be exported from a free account), `true` only if the user has Pro but it is not saved. |
 | `look` | none | A tested look (`looks.py` lists them): adds the styles `title`, `accent`, `big`, `label` and `caption`, and captions use `caption` by default. Spec `styles` with the same name override the look's key by key. |
+| `fonts` | look's pairing | `{"headline": "bebas", "body": "kilig"}`: swap the look's fonts for another curated pairing (see `looks.py <look>`, `pairings`). Sizes are scaled by the fonts' measured widths. Only with `look`. |
 | `brand` | look's colors | `{"accent": "#F59E0B", "text": "#FFFFFF", "muted": "#94A3B8"}`: the brand colors the look's styles use. Only with `look`. |
 | `styles` | {} | Named text styles, reused via `"style": "<name>"`. |
 | `video` | required | Main-track clips, in playback order. |
@@ -88,6 +89,7 @@ Vertical-video safe zone (platform UI covers the rest): keep text within `y` fro
 | `mask` | `{"type": "circle", "x": 0, "y": 0, "size": 0.5, "feather": 10, "rotation": 0, "invert": false}`. Types: `linear`, `mirror`, `circle`, `rectangle`, `heart`, `star`. `x`,`y` in -1..1 of the clip; `size` = fraction of clip height. Rectangle also takes `width` (fraction of clip width) and `round` (0-100). |
 | `blend` | Blend mode: `screen`, `overlay`, `multiply`, `soft_light`, `hard_light`, `lighten`, `darken`, `color_dodge`, `color_burn`, `linear_burn`. Meaningful on overlays. |
 | `chroma` | Green screen: `{"color": "#00FF00", "intensity": 20, "shadow": 0}`. |
+| `adjust` | A constant color correction: `{"brightness": -0.1, "contrast": 0.05, "saturation": 0.08}`, each -1..1 (0 = unchanged). `scan_footage.py` proposes it to make shots match. Not together with `keyframes` on the same property. |
 | `remove_bg` | `true` turns on CapCut's Remove BG > Auto removal, which cuts the person or main subject out of a video or image. **CapCut Pro feature**: it is rejected unless Pro is allowed. CapCut computes the cutout the first time the draft opens, a few seconds per clip. Below a cutout on the main track there is only black, so to put someone on a new background, place the background on the main track and the person in an overlay with `remove_bg`. |
 
 ## Motion presets: enter and exit
@@ -136,6 +138,18 @@ text `enter` with a catalog `intro` such as `fade_in` when it should also fade.
   itself (`spacing` in half-canvas units), each copy `stagger` seconds later, as an outline (black
   fill, white stroke; or `"style": "<name>"` / `color` / `stroke` for the copies). `"echo": true`
   uses those defaults.
+
+## Text contrast
+
+For every text over the main track, the builder grabs the frame behind it, measures the area the text
+covers, and compares it with the text color (WCAG contrast). Under 3:1 it warns with the color that
+would read there; with `"auto"` or a color list it picks one. Where light text still does not reach
+3:1 because the footage is busy (fireworks, city lights), it adds a scrim: a soft black gradient
+(transparent, 45 %, transparent; `cappus_assets/scrim.png` next to the spec) on a video track behind
+that text only, fading in and out with it, shared by a title and its partner line. It says so under
+`notes`. No outline and no drop shadow is ever added. A text and the one that comes in with it (within 1.2 s) keep the same
+light or dark color. Captions and texts with a stroke of 20 or more or a background box are not
+checked.
 
 ## Text fit warnings
 
@@ -201,7 +215,7 @@ the style.
 |---|---|---|
 | `font` | system | Kind `font` (`catalog.py font <keyword>`). Check the font covers your language. |
 | `size` | 8 | CapCut font size. On 1080x1920: captions 7-10, titles 12-18, single big words 20-30. A first guess - tell the user to eyeball it. |
-| `color` | `#FFFFFF` | `#RRGGBB`. |
+| `color` | `#FFFFFF` | `#RRGGBB`; `"auto"` (white or dark, whichever reads over the footage behind it); or a preference list such as `["#FFA16B", "#FFFFFF", "auto"]`: the first that reaches 3:1 contrast. Looks use lists, so an accent falls back to white or dark where it would wash out. |
 | `bold`, `italic`, `underline` | false | |
 | `align` | `center` | `left`, `center`, `right`. |
 | `wrap` | 0.82 | Max line width as a fraction of canvas width; `false` disables wrapping. |

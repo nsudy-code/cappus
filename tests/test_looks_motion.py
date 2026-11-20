@@ -65,8 +65,8 @@ def test_every_look_style_builds(tmp_path, media, name):
 
 def test_brand_color_replaces_the_look_accent():
     st = looks.styles("clean_tech", {"accent": "#F59E0B"})
-    assert st["accent"]["color"] == "#F59E0B"
-    assert st["title"]["color"] == looks.looks()["clean_tech"]["colors"]["text"]
+    assert st["accent"]["color"][0] == "#F59E0B"  # a preference list: the brand accent first
+    assert st["title"]["color"][0] == looks.looks()["clean_tech"]["colors"]["text"]
 
 
 def test_spec_styles_override_the_look_key_by_key(tmp_path, media):
@@ -175,7 +175,7 @@ def test_a_line_too_wide_for_the_wrap_width_is_warned(tmp_path, media):
     spec = {"video": clip(media), "texts": [
         {"text": "COMPANY PROFILES AND MORE", "at": 0, "duration": 1, "font": "bungee", "size": 14},
         {"text": "SHORT", "at": 1, "duration": 1, "font": "bungee", "size": 14}]}
-    warnings = report(check(tmp_path, spec))["warnings"]
+    warnings = [w for w in report(check(tmp_path, spec))["warnings"] if "wide" in w]
     assert len(warnings) == 1 and warnings[0].startswith("texts[0]") and "wraps onto another line" in warnings[0]
 
 
@@ -183,7 +183,7 @@ def test_the_lux_promo_sizes_fit(tmp_path, media):
     """Line lengths and sizes from the lux.ai.id promo, which looked right in CapCut."""
     texts = [{"text": t, "at": i, "duration": 1, "font": "poppins_bold", "size": s, "bold": True}
              for i, (t, s) in enumerate((("COMPANY PROFILES", 15), ("FIXED PRICE FROM", 12), ("IDR 3,000,000", 15)))]
-    assert report(check(tmp_path, {"video": clip(media), "texts": texts}))["warnings"] == []
+    assert [w for w in report(check(tmp_path, {"video": clip(media), "texts": texts}))["warnings"] if "wide" in w] == []
 
 
 # ---------- generated music ----------
@@ -287,3 +287,176 @@ def test_drift_and_kinetic_presets_reach_the_draft(tmp_path, media):
     scale = go["kf"]["UNIFORM_SCALE"] if "UNIFORM_SCALE" in go["kf"] else go["kf"]["KFTypeScaleX"]
     assert scale[0] == pytest.approx(1.9) and max(scale) == pytest.approx(14 * 1.0 * (1 + 0.05 * 0.74), rel=0.05)
     assert up["kf"]["KFTypeRotation"][0] == pytest.approx(8 - 120) and up["kf"]["KFTypeRotation"][-1] == pytest.approx(8)
+
+
+def test_letter_spacing_counts_toward_the_fit(tmp_path, media):
+    """Measured in CapCut 9.8: these two lines, with the cinematic look's spacing."""
+    spec = {"video": clip(media), "texts": [
+        {"text": "SUMMER", "at": 0, "duration": 1, "font": "cinzel", "size": 26, "letter_spacing": 6},
+        {"text": "NEXT SUMMER", "at": 1, "duration": 1, "font": "cinzel", "size": 18, "letter_spacing": 4}]}
+    warnings = [w for w in report(check(tmp_path, spec))["warnings"] if "wide" in w]
+    assert len(warnings) == 1 and warnings[0].startswith("texts[1]") and "wraps" in warnings[0], warnings
+
+
+# ---------- footage: scan, adjust, motion around the transform ----------
+
+def test_scan_finds_the_bad_copies_and_keeps_the_good_one(tmp_path, media):
+    import shutil
+    import subprocess
+    folder = tmp_path / "clips"
+    folder.mkdir()
+    shutil.copy(media / "landscape.mp4", folder / "good.mp4")
+    for name, vf in (("blurry.mp4", "gblur=sigma=8"), ("dark.mp4", "eq=brightness=-0.45")):
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(media / "landscape.mp4"), "-vf", vf, "-an",
+                        str(folder / name)], check=True)
+    res = run("scan_footage.py", folder, "--out", tmp_path / "scan")
+    assert res.returncode == 0, res.stderr
+    rep = json.loads((tmp_path / "scan" / "footage.json").read_text(encoding="utf-8"))
+    assert [s["name"] for s in rep["ranked"]][0] == "good.mp4"
+    dupes = {s["name"]: s for s in rep["duplicates"]}
+    assert set(dupes) == {"blurry.mp4", "dark.mp4"}, [s["name"] for s in rep["ranked"]]
+    assert any("blurry" in r for r in dupes["blurry.mp4"]["reasons"])
+    good_exposure = rep["ranked"][0]["stats"]["exposure"]
+    assert dupes["dark.mp4"]["stats"]["exposure"] < good_exposure - 0.1
+    good = rep["ranked"][0]
+    assert good["in"] <= good["best"]["in"] < good["best"]["out"] <= good["out"]
+    assert good["text_y"] in (0.5, 0.0, -0.5)
+    assert (tmp_path / "scan" / "best.jpg").is_file()
+
+
+def test_adjust_and_motion_keep_the_clip_transform(tmp_path, media):
+    spec = {"name": "t-adjust", "video": [{"src": str(media / "landscape.mp4"), "duration": 2, "fit": "cover",
+                                           "adjust": {"brightness": -0.1, "saturation": 0.08},
+                                           "transform": {"x": 0.4}, "motion": {"type": "pan_left", "amount": 0.06}}]}
+    path = tmp_path / "spec.json"
+    path.write_text(json.dumps(spec), encoding="utf-8")
+    drafts = tmp_path / "drafts"
+    drafts.mkdir()
+    res = run("build_draft.py", path, "--drafts-dir", drafts)
+    assert res.returncode == 0, res.stderr
+    data = json.loads((drafts / "t-adjust" / "draft_content.json").read_text(encoding="utf-8"))
+    seg = next(t for t in data["tracks"] if t["type"] == "video")["segments"][0]
+    kf = {k["property_type"]: [x["values"][0] for x in k["keyframe_list"]] for k in seg["common_keyframes"]}
+    assert kf["KFTypeBrightness"] == [pytest.approx(-0.1)] * 2
+    assert kf["KFTypeSaturation"] == [pytest.approx(0.08)] * 2
+    assert kf["KFTypePositionX"][0] == pytest.approx(0.46) and kf["KFTypePositionX"][-1] == pytest.approx(0.34)
+
+
+def test_adjust_conflicts_with_keyframes_on_the_same_property(tmp_path, media):
+    res = check(tmp_path, {"video": [{"src": str(media / "landscape.mp4"), "duration": 2, "adjust": {"brightness": 0.1},
+                                      "keyframes": {"brightness": [[0, 0], [1, 0.2]]}}]})
+    assert res.returncode == 1 and "adjust and keyframes both set 'brightness'" in res.stderr, res.stderr
+
+
+# ---------- suggest: fit the theme and the footage, and differ from the last edits ----------
+
+@pytest.mark.parametrize("theme, look", [
+    ("bikin video promo website saya", "kinetic"),
+    ("promo villa mewah", "luxury"),
+    ("flash sale produk baru", "bold_promo"),
+    ("jualan kopi di cafe", "playful"),
+    ("liburan ke pantai", "cinematic"),
+])
+def test_suggest_matches_the_theme(theme, look):
+    assert looks.suggest(theme, seed=1)["spec"]["look"] == look
+
+
+def test_suggest_with_footage_and_no_theme_starts_from_cinematic():
+    scan = {"palette": {"accent": "#61CCFF", "pace": "low", "light": {"day": 5}}}
+    choice = looks.suggest("", scan=scan, seed=1)
+    assert choice["spec"]["look"] == "cinematic" and choice["spec"]["brand"] == {"accent": "#61CCFF"}
+
+
+def test_brand_accent_wins_over_the_footage():
+    scan = {"palette": {"accent": "#61CCFF", "pace": "low", "light": {"day": 5}}}
+    assert looks.suggest("liburan", scan=scan, brand_accent="#F59E0B", seed=1)["spec"]["brand"]["accent"] == "#F59E0B"
+
+
+def test_suggest_never_repeats_the_last_two_edits(cappus_home):
+    seen = []
+    for _ in range(6):
+        choice = looks.suggest("liburan ke pantai", seed=None, history=looks.load_history())
+        looks.record(choice)
+        seen.append(choice["spec"]["fonts"]["headline"])
+    for a, b, c in zip(seen, seen[1:], seen[2:]):
+        assert c not in (a, b), seen
+    assert len(set(seen)) >= 3
+
+
+def test_spec_fonts_swap_the_pairing_and_scale_sizes(tmp_path, media):
+    spec = {"look": "cinematic", "fonts": {"headline": "sequel_wide", "body": "dm_sans_italic"}, "video": clip(media),
+            "texts": [{"text": "SUMMER", "at": 0, "duration": 1, "style": "title"}]}
+    rows = texts_in_draft(tmp_path, spec)
+    base = looks.looks()["cinematic"]["styles"]["title"]["size"]
+    ratio = _common.curated_fonts()["anton"]["width"] / _common.curated_fonts()["sequel_wide"]["width"]
+    assert rows[0]["size"] == pytest.approx(base * max(0.4, min(1.5, ratio)), abs=0.2)  # the ratio is capped
+
+
+def test_spec_fonts_must_be_curated(tmp_path, media):
+    res = check(tmp_path, {"look": "cinematic", "fonts": {"headline": "comic_sans"}, "video": clip(media)})
+    assert res.returncode == 1 and "not in fonts.json" in res.stderr, res.stderr
+
+
+def test_every_pairing_uses_curated_fonts():
+    for name, lk in looks.looks().items():
+        for pr in lk.get("pairings", []):
+            assert pr["headline"] in _common.curated_fonts() and pr["body"] in _common.curated_fonts(), (name, pr)
+
+
+# ---------- text color against the footage behind it ----------
+
+@pytest.fixture
+def plates(tmp_path):
+    from PIL import Image
+    Image.new("RGB", (1080, 1920), (245, 240, 230)).save(tmp_path / "bright.png")
+    Image.new("RGB", (1080, 1920), (12, 14, 20)).save(tmp_path / "dark.png")
+    return tmp_path
+
+
+def colors_in_draft(tmp_path, spec):
+    path = tmp_path / "spec.json"
+    path.write_text(json.dumps({"name": "t-color", **spec}), encoding="utf-8")
+    drafts = tmp_path / "drafts"
+    drafts.mkdir(exist_ok=True)
+    res = run("build_draft.py", path, "--drafts-dir", drafts, "--overwrite")
+    assert res.returncode == 0, res.stderr
+    data = json.loads((drafts / "t-color" / "draft_content.json").read_text(encoding="utf-8"))
+    out = {}
+    for m in data["materials"]["texts"]:
+        c = json.loads(m["content"])
+        rgb = c["styles"][0]["fill"]["content"]["solid"]["color"]
+        out[c["text"]] = "#" + "".join(f"{int(round(v * 255)):02X}" for v in rgb)
+    return out, json.loads(res.stdout)
+
+
+def test_white_text_on_a_bright_shot_is_warned(plates):
+    spec = {"video": [{"src": str(plates / "bright.png"), "duration": 2}],
+            "texts": [{"text": "HELLO", "at": 0, "duration": 2, "size": 20, "color": "#FFFFFF"}]}
+    _, rep = colors_in_draft(plates, spec)
+    assert len(rep["warnings"]) == 1 and "too low to read" in rep["warnings"][0], rep["warnings"]
+
+
+def test_auto_and_color_lists_pick_what_reads(plates):
+    spec = {"video": [{"src": str(plates / "bright.png"), "duration": 2}, {"src": str(plates / "dark.png"), "duration": 2}],
+            "texts": [{"text": "ON BRIGHT", "at": 0, "duration": 2, "size": 20, "color": "auto"},
+                      {"text": "ON DARK", "at": 2, "duration": 2, "size": 20, "color": "auto"},
+                      {"text": "ACCENT", "at": 2.5, "duration": 1, "size": 20, "y": -0.3, "color": ["#FFA16B", "#FFFFFF", "auto"]},
+                      {"text": "PALE", "at": 0.5, "duration": 1, "size": 20, "y": -0.3, "color": ["#FFF5E0", "auto"]}]}
+    colors, rep = colors_in_draft(plates, spec)
+    assert colors["ON BRIGHT"] == "#111111" and colors["ON DARK"] == "#FFFFFF"
+    assert colors["ACCENT"] == "#FFA16B"         # an orange reads on dark
+    assert colors["PALE"] == "#111111"           # a pale color on a bright plate falls back to dark
+    assert rep["warnings"] == []
+
+
+def test_scan_accent_avoids_the_background_hue():
+    import numpy as np
+    import scan_footage as sf
+    blue = np.zeros((90, 160, 3)); blue[..., 2] = 0.8; blue[..., 1] = 0.5   # sea
+    blue[:10, :40] = (1.0, 0.55, 0.2)                                       # a bit of sunset
+    assert sf.hex_of((1, 0.5, 0.2)) == "#FF8033"
+    # the same selection the scan uses, on one frame
+    px = blue.reshape(-1, 3)
+    hi, lo = px.max(axis=1), px.min(axis=1)
+    vivid = px[((hi - lo) / np.maximum(hi, 1e-6) > 0.45) & (hi > 0.35)]
+    assert len(vivid) > 200
