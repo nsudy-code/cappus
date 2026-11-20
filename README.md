@@ -108,13 +108,13 @@ Use one option, not both. With both, Claude sees the skill twice.
 ### 2. Install the Python dependencies
 
 ```bash
-python -m pip install "pycapcut==0.0.4" numpy
+python -m pip install "pycapcut==0.0.4" numpy Pillow
 ```
 
 On macOS and most Linux systems the command is `python3` (`python3 -m pip install ...`), here and in
 every command below. From a clone you can run
 `python -m pip install -r skills/capcut-editor/requirements.txt` instead.
-`pycapcut` writes the draft files, and `numpy` is used for beat detection. If they are missing,
+`pycapcut` writes the draft files, `numpy` is used for beat detection, and `Pillow` draws the preview render. If they are missing,
 Claude installs them on first use. To check a machine, run
 `python skills/capcut-editor/scripts/doctor.py`: it checks Python, these packages, ffmpeg, CapCut
 desktop and its drafts folder, and says how to fix anything missing. It needs nothing installed,

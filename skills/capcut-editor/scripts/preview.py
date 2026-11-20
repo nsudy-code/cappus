@@ -28,12 +28,14 @@ import math
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 from _common import SpecError, font_width
+import easing
 from build_draft import Builder
 
 LABEL = "PREVIEW - approximate"
@@ -69,11 +71,24 @@ def _rgb(c, alpha=1.0) -> tuple:
     return tuple(int(round(255 * float(v))) for v in c[:3]) + (int(round(255 * alpha)),)
 
 
+def _curve(a, b):
+    """The cubic-bezier (x1, y1, x2, y2) that easing.apply wrote on the segment a -> b, or None."""
+    right, left = getattr(a, "_right", None), getattr(b, "_left", None)
+    d, dv = b.time_offset - a.time_offset, float(b.values[0]) - float(a.values[0])
+    if not (right and left) or d <= 0:
+        return None
+    if dv == 0:
+        return (right[0] / d, 0.0, 1 + left[0] / d, 1.0)
+    return (right[0] / d, right[1] / dv, 1 + left[0] / d, 1 + left[1] / dv)
+
+
 def _kf(seg) -> dict:
-    """Keyframes by property name: [(seconds from segment start, value), ...]."""
+    """Keyframes by property name: [(seconds from segment start, value, curve into it), ...]."""
     out = {}
     for kl in getattr(seg, "common_keyframes", []) or []:
-        pts = sorted((k.time_offset / 1e6, float(k.values[0])) for k in kl.keyframes)
+        kfs = sorted(kl.keyframes, key=lambda k: k.time_offset)
+        pts = [(k.time_offset / 1e6, float(k.values[0]), _curve(kfs[i - 1], k) if i else None)
+               for i, k in enumerate(kfs)]
         if pts:
             out[kl.keyframe_property.name] = pts
     return out
@@ -84,9 +99,12 @@ def _at(pts, t, default):
         return default
     if t <= pts[0][0]:
         return pts[0][1]
-    for (t0, v0), (t1, v1) in zip(pts, pts[1:]):
+    for (t0, v0, _), (t1, v1, curve) in zip(pts, pts[1:]):
         if t <= t1:
-            return v0 if t1 <= t0 else v0 + (v1 - v0) * (t - t0) / (t1 - t0)
+            if t1 <= t0:
+                return v0
+            u = (t - t0) / (t1 - t0)
+            return v0 + (v1 - v0) * (easing.bezier_at(curve, u) if curve else u)
     return pts[-1][1]
 
 
@@ -105,8 +123,8 @@ def _transform(seg, t) -> dict:
 
 def _max_scale(seg) -> tuple:
     cs, kf = seg.clip_settings, seg._kf
-    xs = [cs.scale_x] + [v for k in ("uniform_scale", "scale_x") for _, v in kf.get(k, [])]
-    ys = [cs.scale_y] + [v for k in ("uniform_scale", "scale_y") for _, v in kf.get(k, [])]
+    xs = [cs.scale_x] + [p[1] for k in ("uniform_scale", "scale_x") for p in kf.get(k, [])]
+    ys = [cs.scale_y] + [p[1] for k in ("uniform_scale", "scale_y") for p in kf.get(k, [])]
     return max(xs), max(ys)
 
 
@@ -168,7 +186,7 @@ def _vol_expr(pts, base) -> str:
     if not pts:
         return f"{base:.4f}"
     expr = f"{pts[-1][1]:.4f}"
-    for (t0, v0), (t1, v1) in reversed(list(zip(pts, pts[1:]))):
+    for (t0, v0, *_), (t1, v1, *_) in reversed(list(zip(pts, pts[1:]))):
         seg = f"{v0:.4f}" if t1 <= t0 else f"({v0:.4f}+({v1 - v0:.4f})*(t-{t0:.4f})/{t1 - t0:.4f})"
         expr = f"if(lt(t,{t1:.4f}),{seg},{expr})"
     return f"if(lt(t,{pts[0][0]:.4f}),{pts[0][1]:.4f},{expr})"
@@ -212,9 +230,9 @@ class VideoLayer:
             vf = (f"setpts=(PTS-STARTPTS)/{speed:.6f},fps={self.fps},"
                   f"scale={self.dec[0]}:{self.dec[1]}:flags=bilinear,format=rgba")
             self.proc = subprocess.Popen(
-                ["ffmpeg", "-v", "error", "-ss", f"{src.start / 1e6:.4f}", "-t", f"{src.duration / 1e6:.4f}",
-                 "-i", self.path, "-vf", vf, "-an", "-f", "rawvideo", "-"],
-                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+                ["ffmpeg", "-nostdin", "-v", "error", "-ss", f"{src.start / 1e6:.4f}", "-t",
+                 f"{src.duration / 1e6:.4f}", "-i", self.path, "-vf", vf, "-an", "-f", "rawvideo", "-"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         size = self.dec[0] * self.dec[1] * 4
         while self.index < want:
             buf = self.proc.stdout.read(size)
@@ -369,7 +387,7 @@ def audio_args(sounds, total):
         dur = seg.target_timerange.duration / 1e6
         f = [f"[{i}:a]aresample=44100", "aformat=channel_layouts=stereo"] + _atempo(seg.speed.speed)
         f.append("asetpts=PTS-STARTPTS")
-        vpts = [(t, v) for t, v in seg._kf.get("volume", [])]
+        vpts = [(p[0], p[1]) for p in seg._kf.get("volume", [])]
         f.append(f"volume='{_vol_expr(vpts, vol)}':eval=frame")
         fade = getattr(seg, "fade", None)
         if fade is not None:
@@ -384,7 +402,7 @@ def audio_args(sounds, total):
     if not labels:
         return [], None
     mix = (f"{''.join(labels)}amix=inputs={len(labels)}:normalize=0:dropout_transition=0,"
-           f"apad,atrim=0:{total:.3f}[aout]")
+           f"apad=whole_dur={total:.3f},atrim=0:{total:.3f}[aout]")  # a bare apad never ends
     return inputs, ";".join(chains + [mix])
 
 
@@ -459,7 +477,9 @@ def render(spec_path: Path, out_dir: Path, size=960, fps=15, every=None) -> dict
     cmd += ["-c:v", "libx264", "-preset", "veryfast", "-crf", "28", "-pix_fmt", "yuv420p",
             "-metadata", f"title={LABEL} of {spec_path.name}", "-metadata", f"comment={NOT_DRAWN}",
             "-t", f"{total:.3f}", "-movflags", "+faststart", str(mp4)]
-    enc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+    # stderr goes to a file: a pipe nobody reads until the end can fill up and stall ffmpeg (and us)
+    log = tempfile.TemporaryFile()
+    enc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=log)
     want = sheet_times(builder, total, every)
     tiles, wi = [], 0
     label_font = _font(max(10, canvas[0] // 36))
@@ -479,14 +499,17 @@ def render(spec_path: Path, out_dir: Path, size=960, fps=15, every=None) -> dict
             stamp(frame, t, label_font)
             enc.stdin.write(frame.convert("RGB").tobytes())
         enc.stdin.close()
-        err = enc.stderr.read().decode("utf-8", "replace")
-        if enc.wait() != 0:
+        code = enc.wait()
+        log.seek(0)
+        err = log.read().decode("utf-8", "replace")
+        if code != 0:
             raise RuntimeError(f"ffmpeg failed: {err.strip()[-800:]}")
     finally:
         for layer in layers:
             layer.close()
         if enc.poll() is None:
             enc.kill()
+        log.close()
     contact_sheet(tiles, jpg, canvas, spec.get("name", spec_path.stem))
     return {
         "status": "preview written (an approximation of the draft, not a CapCut render)",

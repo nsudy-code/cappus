@@ -52,10 +52,10 @@ efek Pro (lihat [bagian 8](#8-capcut-pro)).
 ### Langkah 1: install dependensi Python
 
 ```bash
-python -m pip install "pycapcut==0.0.4" numpy
+python -m pip install "pycapcut==0.0.4" numpy Pillow
 ```
 
-Perintah ini memasang `pycapcut` (penulis draft CapCut) dan `numpy` (analisis beat lagu). Kalau
+Perintah ini memasang `pycapcut` (penulis draft CapCut), `numpy` (analisis beat lagu) dan `Pillow` (preview render). Kalau
 belum terpasang, Claude juga akan memasangnya saat pertama kali dipakai. Di macOS dan kebanyakan
 Linux, perintahnya `python3` (`python3 -m pip install ...`), juga untuk semua perintah di panduan ini.
 

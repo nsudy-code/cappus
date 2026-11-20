@@ -34,7 +34,7 @@ macOS and most Linux systems that is usually `python3` (and `python3 -m pip`).
 `doctor.py` (step 1 of the workflow) tells you whether any of this is missing.
 
 ```bash
-python -m pip install -r <skill>/requirements.txt    # pycapcut + numpy
+python -m pip install -r <skill>/requirements.txt    # pycapcut + numpy + Pillow
 ```
 
 Captions from speech need one more, optional package (see step 2):

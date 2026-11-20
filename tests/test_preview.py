@@ -118,3 +118,44 @@ def test_a_broken_spec_is_reported_not_rendered(tmp_path):
     assert res.returncode == 1
     assert "missing.mp4" in res.stderr
     assert not (tmp_path / "pv" / "preview.mp4").exists()
+
+
+def test_eased_keyframes_follow_their_curve_not_a_straight_line():
+    import easing
+    from pycapcut.keyframe import Keyframe
+
+    easing.install()
+    a, b = Keyframe(0, 0.0), Keyframe(1_000_000, 1.0)
+    a.values, b.values = [0.0], [1.0]
+
+    class KL:
+        keyframes = [a, b]
+
+        class keyframe_property:
+            name = "position_y"
+
+    easing.apply(KL, {1_000_000: easing.parse("cubic_out", "test")}, easing.Graphs())
+
+    class Seg:
+        common_keyframes = [KL]
+
+    pts = preview._kf(Seg)["position_y"]
+    mid = preview._at(pts, 0.5, None)
+    assert mid == pytest.approx(easing.bezier_at(easing.PRESETS["cubic_out"][0], 0.5), abs=1e-6)
+    assert mid > 0.7  # cubic out is well past halfway at half time; a straight line would give 0.5
+    assert preview._at([(0, 0.0, None), (1, 1.0, None)], 0.5, None) == pytest.approx(0.5)
+
+
+def test_a_spec_with_sound_effects_renders_without_stalling(tmp_path, media):
+    # many short audio inputs once made ffmpeg fill its stderr pipe and stall the render
+    import os
+    import sys
+    from conftest import SCRIPTS
+
+    out = tmp_path / "pv"
+    res = subprocess.run([sys.executable, str(SCRIPTS / "preview.py"), str(EXAMPLES / "demo-sfx.json"), "--out", str(out)],
+                         capture_output=True, text=True, encoding="utf-8", timeout=180,
+                         env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+    assert res.returncode == 0, res.stderr
+    kinds = {s["codec_type"] for s in probe(out / "preview.mp4")["streams"]}
+    assert kinds == {"video", "audio"}

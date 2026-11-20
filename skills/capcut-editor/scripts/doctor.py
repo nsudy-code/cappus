@@ -81,9 +81,12 @@ def main() -> int:
         problems.append(f"Python {report['python']['version']} is too old; the scripts need Python 3.9 or newer.")
 
     pkgs = {"pycapcut": package("pycapcut", "pycapcut"), "numpy": package("numpy", "numpy"),
-            "pymediainfo": package("pymediainfo", "pymediainfo")}
+            "pymediainfo": package("pymediainfo", "pymediainfo"), "Pillow": package("Pillow", "PIL")}
     report["packages"] = pkgs
     missing = [n for n in ("pycapcut", "numpy") if not pkgs[n]]
+    if not pkgs["Pillow"]:
+        notes.append(f"Pillow is not installed, so preview.py (the preview render when CapCut cannot be "
+                     f"watched) will not run. Run: {pip}")
     if missing:
         problems.append(f"{' and '.join(missing)} not installed for this Python. Run: {pip}")
     if pkgs["pymediainfo"]:
