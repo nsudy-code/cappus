@@ -109,7 +109,11 @@ def cmd_probe(args) -> int:
     if not items:
         print("nothing to probe for those kinds", file=sys.stderr)
         return 1
-    drafts = find_drafts_dir(args.drafts_dir)
+    if args.drafts_dir:  # always the folder asked for, made if needed; never a default instead
+        drafts = Path(args.drafts_dir)
+        drafts.mkdir(parents=True, exist_ok=True)
+    else:
+        drafts = find_drafts_dir()
     if drafts is None:
         print("CapCut's draft folder was not found; pass --drafts-dir", file=sys.stderr)
         return 2

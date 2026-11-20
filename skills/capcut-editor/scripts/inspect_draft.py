@@ -79,7 +79,8 @@ def main() -> int:
     drafts = find_drafts_dir(args.drafts_dir)
     if args.list or not args.draft:
         if drafts is None:
-            print("CapCut draft folder not found; pass --drafts-dir", file=sys.stderr)
+            print(f"drafts folder {args.drafts_dir} does not exist" if args.drafts_dir
+                  else "CapCut draft folder not found; pass --drafts-dir", file=sys.stderr)
             return 2
         rows = []
         for d in sorted(drafts.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
