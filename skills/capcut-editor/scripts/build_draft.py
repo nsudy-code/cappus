@@ -250,7 +250,8 @@ class Builder:
         self._fit_warned: set = set()
         self.main_clips: list = []  # what plays on the main track, for the contrast check
         self._picked: list = []      # (start, white or dark) chosen so far, to keep pairs alike
-        self._outline = None
+        self._scrim = False
+        self._scrims: list = []      # (start, end, y) already dimmed
         self.notes: list = []        # things the builder decided for you, for the report
 
     # ---------- looks, motion presets, text fit ----------
@@ -367,16 +368,41 @@ class Builder:
         score, best = max(scored)
         guarded = (st.get("stroke") or {}).get("width", 0) >= 20 or bool(st.get("background"))
         if not guarded:
-            if score >= 1.6:
-                # busy footage: a thin outline in the opposite tone, not a drop shadow
-                light = contrast.luminance(contrast.hex_rgb(best)) > 0.4
-                self._outline = {"color": "#000000" if light else "#FFFFFF", "width": 18, "opacity": 0.6}
-                self.notes.append(f"{ctx}: '{str(text)[:24]}' sits on busy footage ({score:.1f}:1), so it got a thin "
-                                  "outline; moving it to a calmer band would read better still.")
+            if score >= 1.6 and contrast.luminance(contrast.hex_rgb(best)) > 0.4:
+                # busy footage under light text: dim just that band with a soft gradient (a scrim);
+                # no outline and no drop shadow, both look cheap on footage
+                self._scrim = True
+                self.notes.append(f"{ctx}: '{str(text)[:24]}' sits on busy footage ({score:.1f}:1), so a soft dark "
+                                  "gradient dims the band behind it; a calmer band (text_y) would need none.")
             else:
                 self.warnings.append(f"{ctx}: '{str(text)[:24]}' has no readable color here (best {best}, {score:.1f}:1 "
                                      "against the footage behind it); move it to the shot's calmer band (text_y).")
         return best
+
+    def add_scrim(self, st, start, dur, ctx):
+        """A soft black gradient (transparent - 45% - transparent) across the canvas behind a text."""
+        y = float(st.get("y", 0))
+        end = start + dur
+        # one scrim covers a title and the line that comes with it (it is 0.75 canvas-halves tall)
+        if any(a - 1_200_000 <= start <= b and abs(y - yy) < 0.3 for a, b, yy in self._scrims):
+            return
+        path = self.base / "cappus_assets" / "scrim.png"
+        if not path.is_file():
+            import numpy as np
+            from PIL import Image
+            path.parent.mkdir(exist_ok=True)
+            h = 720
+            t = np.linspace(-1, 1, h)
+            alpha = (0.45 * (np.cos(np.clip(t, -1, 1) * np.pi) + 1) / 2 * 255).astype(np.uint8)
+            img = np.zeros((h, 1080, 4), np.uint8)
+            img[..., 3] = alpha[:, None]
+            Image.fromarray(img, "RGBA").save(path)
+        item = {"src": str(path), "duration": dur / 1e6, "transform": {"y": y}, "enter": "fade", "exit": "fade"}
+        seg = self.make_video(item, start, f"{ctx}.scrim")
+        self.decorate_video(seg, item, f"{ctx}.scrim", False)
+        track = self.place(cc.TrackType.video, "scrim", seg.target_timerange)
+        self.script.add_segment(seg, track)
+        self._scrims.append((start, end, y))
 
     def _behind(self, text, st, start, dur):
         t = (start + min(400_000, dur // 2)) / 1e6
@@ -1115,10 +1141,10 @@ class Builder:
                 if st.get("fit_width"):
                     st = dict(st, size=self.fit_size(item["text"], st, ctx))
                     st.setdefault("wrap", False)
-                self._outline = None
+                self._scrim = False
                 st = dict(st, color=self.text_color(item["text"], st, start, dur, ctx))
-                if self._outline and not st.get("stroke"):
-                    st["stroke"] = self._outline
+                if self._scrim:
+                    self.add_scrim(st, start, dur, ctx)
                 seg = self.make_text(item["text"], start, dur, st, ctx)
                 kf = dict(item.get("keyframes") or {})
                 sc = float(st.get("scale", 1.0))

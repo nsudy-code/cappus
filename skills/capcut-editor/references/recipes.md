@@ -194,7 +194,9 @@ what good looks like, so every decision below is yours. Do not ask which clips t
   out, and the builder checks every text against the frame behind it.
 - Dark text only over truly bright areas (sand, snow, sky, a white wall); night, sunset and busy
   shots get white. A title and its label share the same tone.
-- Fix a contrast warning by moving the text to the shot's `text_y`, not by adding a shadow.
+- Fix a contrast warning by moving the text to the shot's `text_y`, not by adding a shadow or an
+  outline (both look cheap on footage). Where the footage is busy anyway, the builder dims the band
+  behind the text with a soft gradient on its own.
 
 ## Writing on-screen text that works
 

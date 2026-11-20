@@ -143,9 +143,11 @@ text `enter` with a catalog `intro` such as `fade_in` when it should also fade.
 
 For every text over the main track, the builder grabs the frame behind it, measures the area the text
 covers, and compares it with the text color (WCAG contrast). Under 3:1 it warns with the color that
-would read there; with `"auto"` or a color list it picks one. Where nothing reaches 3:1 but the
-footage is just busy (1.6:1 or more) it adds a thin outline in the opposite tone (never a drop shadow)
-and says so under `notes`. A text and the one that comes in with it (within 1.2 s) keep the same
+would read there; with `"auto"` or a color list it picks one. Where light text still does not reach
+3:1 because the footage is busy (fireworks, city lights), it adds a scrim: a soft black gradient
+(transparent, 45 %, transparent; `cappus_assets/scrim.png` next to the spec) on a video track behind
+that text only, fading in and out with it, shared by a title and its partner line. It says so under
+`notes`. No outline and no drop shadow is ever added. A text and the one that comes in with it (within 1.2 s) keep the same
 light or dark color. Captions and texts with a stroke of 20 or more or a background box are not
 checked.
 
