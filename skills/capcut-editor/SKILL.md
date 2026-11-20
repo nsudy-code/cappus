@@ -173,7 +173,7 @@ Minimal shape (full reference: `references/edit-spec.md`):
   ],
   "audio": [{"src": "song.mp3", "in": 31.5, "at": 0, "end": "end", "volume": 0.6,
              "fade": {"in": 0.2, "out": 1.0}}],
-  "texts": [{"text": "BALI IN 20 SECONDS", "at": 0.2, "end": "@hook.end", "style": "title", "y": 0.5}],
+  "texts": [{"text": "BALI, DAY ONE", "at": 0.2, "end": "@hook.end", "style": "title", "y": 0.5}],
   "effects": [{"name": "shake", "at": "@walk", "duration": 0.4}]
 }
 ```
