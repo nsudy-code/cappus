@@ -43,7 +43,7 @@ DRAFT_DIR_TOKEN = "##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80
 VISUAL_KEYS = {
     "id", "src", "in", "out", "duration", "speed", "volume", "mute", "fit", "background", "transform",
     "keyframes", "motion", "intro", "outro", "combo", "filter", "effects", "mask", "blend", "chroma",
-    "remove_bg", "fade", "enter", "exit", "drift", "note",
+    "remove_bg", "fade", "enter", "exit", "drift", "adjust", "note",
 }
 MAIN_KEYS = VISUAL_KEYS | {"transition"}
 OVERLAY_KEYS = VISUAL_KEYS | {"at", "end", "track"}
@@ -297,7 +297,9 @@ class Builder:
             return
         k, caps_only = font_width(member) if member is not None else (2.6, False)
         size = float(st.get("size", 8)) * float(st.get("scale", 1.0))
-        spacing = float(st.get("letter_spacing", 0)) * 0.6 * size / 10  # CapCut units, roughly
+        # CapCut letter spacing adds about 0.42 x size px per unit per character (measured in CapCut 9.8:
+        # Cinzel "SUMMER" at size 26 / spacing 6 fit one line, "NEXT SUMMER" at 18 / 4 wrapped)
+        spacing = float(st.get("letter_spacing", 0)) * 0.42 * size
         wrap = st.get("wrap", 0.82)
         limit = (0.82 if wrap is True else float(wrap or 0)) * self.width
         for line in str(text).split("\n"):
@@ -307,7 +309,7 @@ class Builder:
                 fit = size * limit / px
                 self.warnings.append(f"{ctx}: '{line[:30]}' is about {int(px)} px wide at size {size:g}, wider than "
                                      f"the {int(limit)} px wrap width, so it wraps onto another line. Shorten it or "
-                                     f"use size {fit:.0f} or less.")
+                                     f"use size {int(fit * 10) / 10:g} or less.")
                 self._fit_warned.add(ctx)
                 return
             if not limit and px > 0.95 * self.width:
@@ -652,10 +654,26 @@ class Builder:
                          us(num(fd.get("out", 0), f"{ctx}.fade.out", lo=0)))
         kf = dict(c.get("keyframes") or {})
         if c.get("motion"):
+            tr0 = c.get("transform") or {}
+            off = {"x": float(tr0.get("x", 0)), "y": float(tr0.get("y", 0))}
+            sc0 = float(tr0.get("scale", 1.0))
             for prop, pts in self.motion_keyframes(c["motion"], dur, ctx).items():
                 if prop in kf:
                     raise SpecError(f"{ctx}: motion preset and keyframes both animate '{prop}'; keep only one")
+                # the move happens around the clip's own transform (a reframed or scaled clip keeps it)
+                if prop in off:
+                    pts = [[t, v + off[prop]] for t, v in pts]
+                elif prop == "scale":
+                    pts = [[t, v * sc0] for t, v in pts]
                 kf[prop] = pts
+        if c.get("adjust"):  # a constant color correction: brightness / contrast / saturation, -1..1
+            adj = c["adjust"]
+            check_keys(adj, {"brightness", "contrast", "saturation"}, f"{ctx}.adjust")
+            for prop, v in adj.items():
+                if prop in kf:
+                    raise SpecError(f"{ctx}: adjust and keyframes both set '{prop}'; keep only one")
+                v = num(v, f"{ctx}.adjust.{prop}", lo=-1, hi=1)
+                kf[prop] = [[0, v], [dur / 1_000_000, v]]
         tr = c.get("transform") or {}
         s = float(tr.get("scale_x", tr.get("scale", 1.0)))
         if c.get("drift") and "scale" not in kf and not c.get("motion"):
@@ -964,7 +982,8 @@ class Builder:
         k, caps_only = font_width(member) if member is not None else (2.6, False)
         line = max(str(text).split("\n"), key=len)
         caps = line.upper() == line and any(ch.isalpha() for ch in line) and not caps_only
-        size = fit * 1080 / max(1, len(line)) / (k * (1.15 if caps else 1.0))
+        per_char = k * (1.15 if caps else 1.0) + float(st.get("letter_spacing", 0)) * 0.42
+        size = fit * 1080 / max(1, len(line)) / per_char
         return round(min(size, num(st.get("size_max", 48), f"{ctx}.size_max", above=0)), 1)
 
     def build_texts(self):

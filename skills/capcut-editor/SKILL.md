@@ -97,6 +97,11 @@ python <skill>/scripts/probe.py song.mp3 --beats          # bpm, beat times, dow
 python <skill>/scripts/transcribe.py talk.mp4             # what is said, with a time for every word
 ```
 
+**Many clips?** Sort them first: `python <skill>/scripts/scan_footage.py <folder> --out <scratch_dir>/scan`
+splits them into shots, scores each (sharp, exposure, shake, motion), drops duplicates, and gives
+each shot its best window, a color correction (`adjust`) and a vertical crop offset (`reframe_x`).
+Read its `best.jpg`, then follow "A pile of footage into one edit" in `references/recipes.md`.
+
 Actually open the contact sheets with the Read tool. Choosing in/out points from filenames and
 durations alone produces edits that cut mid-gesture or hold on nothing. Zoom the sheet into a window
 whenever you need to place a cut precisely - sheet times are approximate (within one frame-step).

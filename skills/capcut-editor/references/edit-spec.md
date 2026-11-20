@@ -88,6 +88,7 @@ Vertical-video safe zone (platform UI covers the rest): keep text within `y` fro
 | `mask` | `{"type": "circle", "x": 0, "y": 0, "size": 0.5, "feather": 10, "rotation": 0, "invert": false}`. Types: `linear`, `mirror`, `circle`, `rectangle`, `heart`, `star`. `x`,`y` in -1..1 of the clip; `size` = fraction of clip height. Rectangle also takes `width` (fraction of clip width) and `round` (0-100). |
 | `blend` | Blend mode: `screen`, `overlay`, `multiply`, `soft_light`, `hard_light`, `lighten`, `darken`, `color_dodge`, `color_burn`, `linear_burn`. Meaningful on overlays. |
 | `chroma` | Green screen: `{"color": "#00FF00", "intensity": 20, "shadow": 0}`. |
+| `adjust` | A constant color correction: `{"brightness": -0.1, "contrast": 0.05, "saturation": 0.08}`, each -1..1 (0 = unchanged). `scan_footage.py` proposes it to make shots match. Not together with `keyframes` on the same property. |
 | `remove_bg` | `true` turns on CapCut's Remove BG > Auto removal, which cuts the person or main subject out of a video or image. **CapCut Pro feature**: it is rejected unless Pro is allowed. CapCut computes the cutout the first time the draft opens, a few seconds per clip. Below a cutout on the main track there is only black, so to put someone on a new background, place the background on the main track and the person in an overlay with `remove_bg`. |
 
 ## Motion presets: enter and exit

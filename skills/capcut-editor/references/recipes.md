@@ -121,6 +121,55 @@ works too: kinetic text with two or three cards for the proof section.
 6. **Self-check** the `--check` timeline against the beat map (every `at` on a beat), fix every
    fit warning, then build.
 
+## A pile of footage into one edit
+
+The request: "make these clips into one video" with a folder of phone clips. The user cannot say
+what good looks like, so every decision below is yours. Do not ask which clips to use.
+
+1. **Sort it like an editor**: `python <skill>/scripts/scan_footage.py <folder> --out <scratch>/scan`
+   splits every file into shots and scores each 0-100 for sharpness, exposure, shake and motion,
+   finds each shot's best window (`best.in` / `best.out`) and peak, drops duplicates (the same
+   footage twice: copies, re-exports, edited versions), marks `similar_to` (the same scene twice),
+   and proposes `adjust` (color matching) and `reframe_x` (where the action is, for a vertical
+   crop). **Read `best.jpg`** before deciding: the score is technical, you are the art director. A
+   silhouette, a dusk window or a deliberately soft shot can score low and still be the most
+   beautiful frame; a sharp, well-exposed shot of nothing is still nothing.
+2. **Name the story from what you see** and pick its structure:
+
+   | footage | structure (in order) |
+   |---|---|
+   | trip / holiday | the most stunning wide shot, getting there (plane, road), arrival (aerials, first view), doing things (people, details), the golden hour, the night, the best people shot last |
+   | event / wedding / party | the venue, people arriving, the key moment (speech, cake, stage) at the drop, the crowd, details, the send-off |
+   | product / shop / food | the hero shot, the problem or the craving, details close up, it in use, the price or how to get it |
+   | day in the life / vlog | morning, getting ready, the work or the outing, a pause, the evening, a closing line |
+   | sport / action | the biggest move first (as the hook), the build-up, a burst of action shots on the drop, the result |
+
+   Without people the structure is the same with places. Never more than one shot per `similar_to`
+   group back to back.
+3. **Choose shots, not files.** 8-14 shots for 20-30 s. Use each shot's best window, trimmed to the
+   beat grid. The hook is the single best-looking shot (often not the first file); the second best
+   shot ends the edit. Skip shots under score 50 unless you saw in `best.jpg` that they are good.
+4. **Energy follows the music.** Calm, wide, slow shots in the intro; shots with the most `motion`
+   and the people on the drop; a slower hero shot to end. A clip with `fps` 50 or more may play at
+   `speed` 0.5 for one big moment; never slow down 24-30 fps footage.
+5. **Make it look like one video.** Put each shot's `adjust` in the clip (`"adjust": {"brightness":
+   -0.1}`) so the shots match, then one look over everything: the look's filter on a `filters` track
+   across the whole edit at 40-60. Night and golden-hour shots stay as they are; that light is the
+   mood.
+6. **Reframe properly.** Horizontal footage on a vertical canvas: `"fit": "cover"` with
+   `"transform": {"x": <reframe_x>}`, plus a slow `motion` (`push_in`, or a pan in the direction the
+   action moves). Vertical footage on a vertical canvas just uses `cover`. A wide shot with two
+   people or a group loses someone in a vertical crop: use `"fit": "contain"` with
+   `"background": "blur"` for it, or skip it.
+7. **Words on footage.** A title on the hook and a closing line, in the look's styles (`cinematic`
+   is the default for footage: a big Gloock serif over a light Kilig label). No heavy drop shadow: a
+   big shadow looks cheap. Legibility comes from placement: put text at the shot's `text_y` (the
+   calmest, darkest band), never over a bright sky, fireworks or a face. Kinetic words fit footage too: a few
+   `slam` words on the drop over the action, not a word on every beat. Captions only when someone
+   speaks.
+8. **Transitions**: hard cuts on beats; one transition from the look's family where time or place
+   changes (arrival, sunset to night).
+
 ## Photos or clips to a beat-synced reel
 
 1. `probe.py` every file, contact sheets for clips, `--beats` on the user's music (or generate it).

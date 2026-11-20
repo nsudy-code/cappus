@@ -287,3 +287,62 @@ def test_drift_and_kinetic_presets_reach_the_draft(tmp_path, media):
     scale = go["kf"]["UNIFORM_SCALE"] if "UNIFORM_SCALE" in go["kf"] else go["kf"]["KFTypeScaleX"]
     assert scale[0] == pytest.approx(1.9) and max(scale) == pytest.approx(14 * 1.0 * (1 + 0.05 * 0.74), rel=0.05)
     assert up["kf"]["KFTypeRotation"][0] == pytest.approx(8 - 120) and up["kf"]["KFTypeRotation"][-1] == pytest.approx(8)
+
+
+def test_letter_spacing_counts_toward_the_fit(tmp_path, media):
+    """Measured in CapCut 9.8: these two lines, with the cinematic look's spacing."""
+    spec = {"video": clip(media), "texts": [
+        {"text": "SUMMER", "at": 0, "duration": 1, "font": "cinzel", "size": 26, "letter_spacing": 6},
+        {"text": "NEXT SUMMER", "at": 1, "duration": 1, "font": "cinzel", "size": 18, "letter_spacing": 4}]}
+    warnings = report(check(tmp_path, spec))["warnings"]
+    assert len(warnings) == 1 and warnings[0].startswith("texts[1]") and "wraps" in warnings[0], warnings
+
+
+# ---------- footage: scan, adjust, motion around the transform ----------
+
+def test_scan_finds_the_bad_copies_and_keeps_the_good_one(tmp_path, media):
+    import shutil
+    import subprocess
+    folder = tmp_path / "clips"
+    folder.mkdir()
+    shutil.copy(media / "landscape.mp4", folder / "good.mp4")
+    for name, vf in (("blurry.mp4", "gblur=sigma=8"), ("dark.mp4", "eq=brightness=-0.45")):
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(media / "landscape.mp4"), "-vf", vf, "-an",
+                        str(folder / name)], check=True)
+    res = run("scan_footage.py", folder, "--out", tmp_path / "scan")
+    assert res.returncode == 0, res.stderr
+    rep = json.loads((tmp_path / "scan" / "footage.json").read_text(encoding="utf-8"))
+    assert [s["name"] for s in rep["ranked"]][0] == "good.mp4"
+    dupes = {s["name"]: s for s in rep["duplicates"]}
+    assert set(dupes) == {"blurry.mp4", "dark.mp4"}, [s["name"] for s in rep["ranked"]]
+    assert any("blurry" in r for r in dupes["blurry.mp4"]["reasons"])
+    good_exposure = rep["ranked"][0]["stats"]["exposure"]
+    assert dupes["dark.mp4"]["stats"]["exposure"] < good_exposure - 0.1
+    good = rep["ranked"][0]
+    assert good["in"] <= good["best"]["in"] < good["best"]["out"] <= good["out"]
+    assert good["text_y"] in (0.5, 0.0, -0.5)
+    assert (tmp_path / "scan" / "best.jpg").is_file()
+
+
+def test_adjust_and_motion_keep_the_clip_transform(tmp_path, media):
+    spec = {"name": "t-adjust", "video": [{"src": str(media / "landscape.mp4"), "duration": 2, "fit": "cover",
+                                           "adjust": {"brightness": -0.1, "saturation": 0.08},
+                                           "transform": {"x": 0.4}, "motion": {"type": "pan_left", "amount": 0.06}}]}
+    path = tmp_path / "spec.json"
+    path.write_text(json.dumps(spec), encoding="utf-8")
+    drafts = tmp_path / "drafts"
+    drafts.mkdir()
+    res = run("build_draft.py", path, "--drafts-dir", drafts)
+    assert res.returncode == 0, res.stderr
+    data = json.loads((drafts / "t-adjust" / "draft_content.json").read_text(encoding="utf-8"))
+    seg = next(t for t in data["tracks"] if t["type"] == "video")["segments"][0]
+    kf = {k["property_type"]: [x["values"][0] for x in k["keyframe_list"]] for k in seg["common_keyframes"]}
+    assert kf["KFTypeBrightness"] == [pytest.approx(-0.1)] * 2
+    assert kf["KFTypeSaturation"] == [pytest.approx(0.08)] * 2
+    assert kf["KFTypePositionX"][0] == pytest.approx(0.46) and kf["KFTypePositionX"][-1] == pytest.approx(0.34)
+
+
+def test_adjust_conflicts_with_keyframes_on_the_same_property(tmp_path, media):
+    res = check(tmp_path, {"video": [{"src": str(media / "landscape.mp4"), "duration": 2, "adjust": {"brightness": 0.1},
+                                      "keyframes": {"brightness": [[0, 0], [1, 0.2]]}}]})
+    assert res.returncode == 1 and "adjust and keyframes both set 'brightness'" in res.stderr, res.stderr

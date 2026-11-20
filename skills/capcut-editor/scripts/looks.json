@@ -146,67 +146,66 @@
    }
   },
   "cinematic": {
-   "description": "Slow and grand: wide-tracked classical capitals, fades and dissolves, a film look. Travel, brand stories, real estate, documentaries.",
+   "description": "Editorial and calm: a big high-contrast serif over a light sans label, no heavy shadows, slow fades. Travel, brand stories, property, documentaries, any footage that is the star.",
    "fonts": {
-    "headline": "cinzel",
-    "body": "futura"
+    "headline": "gloock",
+    "body": "kilig"
    },
    "colors": {
     "text": "#F5F1E8",
-    "accent": "#E8C27A",
+    "accent": "#FFFFFF",
     "muted": "#B9B2A3",
     "background": "#07070A"
    },
    "styles": {
     "title": {
-     "font": "cinzel",
-     "size": 12,
-     "letter_spacing": 4,
+     "font": "gloock",
+     "size": 18,
      "color": "$text",
      "intro": {
-      "name": "blur_in",
-      "duration": 0.6
-     }
+      "name": "fade_in",
+      "duration": 0.5
+     },
+     "drift": 0.03
     },
     "accent": {
-     "font": "cinzel",
-     "size": 15,
-     "letter_spacing": 4,
+     "font": "gloock",
+     "size": 20,
      "color": "$accent",
      "intro": {
-      "name": "blur_in",
-      "duration": 0.6
-     }
+      "name": "fade_in",
+      "duration": 0.5
+     },
+     "drift": 0.03
     },
     "big": {
-     "font": "cinzel",
-     "size": 22,
-     "letter_spacing": 6,
+     "font": "gloock",
+     "size": 30,
      "color": "$text",
      "intro": {
       "name": "blur_in",
-      "duration": 0.8
-     }
+      "duration": 0.6
+     },
+     "drift": 0.03
     },
     "label": {
-     "font": "futura",
-     "size": 7,
-     "letter_spacing": 2,
-     "color": "$muted",
+     "font": "kilig",
+     "size": 8,
+     "letter_spacing": 1,
+     "color": "$text",
      "intro": {
       "name": "fade_in",
       "duration": 0.5
      }
     },
     "caption": {
-     "font": "futura",
-     "size": 8,
+     "font": "kilig",
+     "size": 9,
+     "bold": true,
      "color": "$text",
-     "shadow": {
+     "stroke": {
       "color": "#000000",
-      "opacity": 0.8,
-      "blur": 20,
-      "distance": 3
+      "width": 25
      }
     }
    },
@@ -324,7 +323,7 @@
    "styles": {
     "title": {
      "font": "didot",
-     "size": 13,
+     "size": 15,
      "letter_spacing": 2,
      "color": "$text",
      "enter": {
@@ -334,7 +333,7 @@
     },
     "accent": {
      "font": "didot",
-     "size": 16,
+     "size": 17,
      "letter_spacing": 2,
      "color": "$accent",
      "enter": {
@@ -344,7 +343,7 @@
     },
     "big": {
      "font": "didot",
-     "size": 24,
+     "size": 28,
      "letter_spacing": 3,
      "color": "$accent",
      "intro": {
@@ -354,7 +353,7 @@
     },
     "label": {
      "font": "giveny",
-     "size": 7,
+     "size": 8,
      "letter_spacing": 4,
      "color": "$muted",
      "intro": {
@@ -367,11 +366,9 @@
      "size": 8,
      "letter_spacing": 2,
      "color": "$text",
-     "shadow": {
+     "stroke": {
       "color": "#000000",
-      "opacity": 0.8,
-      "blur": 20,
-      "distance": 3
+      "width": 25
      }
     }
    },
