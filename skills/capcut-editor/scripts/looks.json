@@ -146,10 +146,10 @@
    }
   },
   "cinematic": {
-   "description": "Editorial and calm: a big high-contrast serif over a light sans label, no heavy shadows, slow fades. Travel, brand stories, property, documentaries, any footage that is the star.",
+   "description": "Bold travel-reel type over footage: huge condensed Anton headlines in white with a clean Poppins label, no shadows, slow fades and dissolves. Travel, trips, events, brand stories, property, any footage that is the star.",
    "fonts": {
-    "headline": "gloock",
-    "body": "kilig"
+    "headline": "anton",
+    "body": "poppins_bold"
    },
    "colors": {
     "text": "#F5F1E8",
@@ -159,47 +159,46 @@
    },
    "styles": {
     "title": {
-     "font": "gloock",
-     "size": 18,
+     "font": "anton",
+     "size": 26,
      "color": "$text",
      "intro": {
       "name": "fade_in",
-      "duration": 0.5
+      "duration": 0.4
      },
      "drift": 0.03
     },
     "accent": {
-     "font": "gloock",
-     "size": 20,
+     "font": "anton",
+     "size": 30,
      "color": "$accent",
      "intro": {
       "name": "fade_in",
-      "duration": 0.5
+      "duration": 0.4
      },
      "drift": 0.03
     },
     "big": {
-     "font": "gloock",
-     "size": 30,
+     "font": "anton",
+     "size": 40,
      "color": "$text",
      "intro": {
       "name": "blur_in",
-      "duration": 0.6
+      "duration": 0.5
      },
      "drift": 0.03
     },
     "label": {
-     "font": "kilig",
+     "font": "poppins_bold",
      "size": 8,
-     "letter_spacing": 1,
      "color": "$text",
      "intro": {
       "name": "fade_in",
-      "duration": 0.5
+      "duration": 0.4
      }
     },
     "caption": {
-     "font": "kilig",
+     "font": "poppins_bold",
      "size": 9,
      "bold": true,
      "color": "$text",
