@@ -272,7 +272,6 @@ menu di bawah mengikuti CapCut berbahasa Inggris.
 | Hapus background dengan kuas | Pilih klip > Video > Remove BG > Custom removal. Dengan CapCut Pro, Claude bisa langsung menyalakan Auto removal di draft. |
 | Freeze frame, reverse | Klik kanan klip > Freeze / Reverse. |
 | Auto reframe | Pilih klip > Auto reframe. |
-| Keyframe dengan easing | Klik keyframe > pilih kurva. Draft hanya membuat keyframe linear. |
 | Color wheel, HSL, curves, LUT | Pilih klip > Adjust. |
 | Sound effect dan musik dari library CapCut | Audio > Sound effects / Music. |
 | Stiker dan text template dari library | Panel Stickers / Text templates. Atau tambahkan sekali secara manual ke draft mana saja, lalu minta Claude memakainya; Claude bisa membaca ID-nya dari draft itu. |

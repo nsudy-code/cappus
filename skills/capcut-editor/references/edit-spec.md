@@ -9,6 +9,7 @@ One JSON object. All times are **seconds**. Unknown keys are rejected (typos get
 - [Time values and references](#time-values-and-references)
 - [Coordinates and scale](#coordinates-and-scale)
 - [video - main track clips](#video---main-track-clips)
+- [Eased keyframes](#eased-keyframes)
 - [overlays - picture-in-picture, B-roll, layers](#overlays)
 - [audio](#audio)
 - [texts and styles](#texts-and-styles)
@@ -29,6 +30,7 @@ One JSON object. All times are **seconds**. Unknown keys are rejected (typos get
 | `fonts` | look's pairing | `{"headline": "bebas", "body": "kilig"}`: swap the look's fonts for another curated pairing (see `looks.py <look>`, `pairings`). Sizes are scaled by the fonts' measured widths. Only with `look`. |
 | `brand` | look's colors | `{"accent": "#F59E0B", "text": "#FFFFFF", "muted": "#94A3B8"}`: the brand colors the look's styles use. Only with `look`. |
 | `styles` | {} | Named text styles, reused via `"style": "<name>"`. |
+| `linear_keyframes` | false | `true` writes every eased curve (keyframe `ease`, motion presets) as several linear keyframes instead of a CapCut curve: the fallback for a CapCut build that shows the curves wrong. |
 | `video` | required | Main-track clips, in playback order. |
 | `overlays`, `audio`, `texts`, `captions`, `effects`, `filters`, `stickers` | [] | See below. |
 
@@ -80,7 +82,7 @@ Vertical-video safe zone (platform UI covers the rest): keep text within `y` fro
 | `background` | For `contain`: `"blur"`, `{"blur": 1-4}` or `"#RRGGBB"`. Main track only. |
 | `transform` | `{"scale", "scale_x", "scale_y", "x", "y", "rotation", "opacity", "flip_h", "flip_v"}` |
 | `motion` | Camera-move preset: `push_in`, `pull_out`, `pan_left`, `pan_right`, `pan_up`, `pan_down`, or `{"type": "push_in", "amount": 0.15}` (default amount 0.12). Runs over the whole clip. |
-| `keyframes` | `{"scale": [[0, 1.0], [2.0, 1.2]], "x": [[0, 0], [-0.01, 0.1]]}`. Time is seconds from the clip's start; **negative = from its end**. Properties: `x`, `y`, `scale`, `scale_x`, `scale_y`, `rotation`, `opacity`, `saturation`, `contrast`, `brightness` (last three: -1..1, 0 = unchanged), `volume`. Linear interpolation. Not with `motion` on the same property. |
+| `keyframes` | `{"scale": [[0, 1.0], [2.0, 1.2]], "x": [[0, 0], [-0.01, 0.1]]}`. Time is seconds from the clip's start; **negative = from its end**. Properties: `x`, `y`, `scale`, `scale_x`, `scale_y`, `rotation`, `opacity`, `saturation`, `contrast`, `brightness` (last three: -1..1, 0 = unchanged), `volume`. A point may carry an ease as a third value, `[2.0, 1.2, "ease_out"]`, and `"ease"` beside the properties sets it for every point without one (see [Eased keyframes](#eased-keyframes)); otherwise linear. Not with `motion` on the same property. |
 | `intro`, `outro` | Clip In/Out animation: `"fade_in"` or `{"name": "zoom_in", "duration": 0.4}` (kinds `video_intro`, `video_outro`). |
 | `combo` | Whole-clip Combo animation (kind `video_combo`). Cannot be combined with intro/outro. |
 | `transition` | Joins this clip to the **next** one (kind `transition`). Not allowed on the last clip. Duration is capped at half the shorter neighbour. |
@@ -95,7 +97,8 @@ Vertical-video safe zone (platform UI covers the rest): keep text within `y` fro
 ## Motion presets: enter and exit
 
 `"enter"` and `"exit"` on main clips, overlays and texts (or in a text style) add eased movement as
-keyframes: drafts only hold linear keyframes, so each curve is sampled into several points. A preset
+one or two keyframe segments with CapCut ease curves (`cubic_out` in, `cubic_in` out, `cubic_in_out`
+for a settle), which the user can change on the keyframe in CapCut. A preset
 ends exactly on the item's resting transform (or style position), so the item looks the same as
 without it once it has played. Give a name, or `{"name": "pop", "duration": 0.4}`.
 
@@ -126,6 +129,28 @@ Presets combine with `keyframes` and `motion` on the same property: the spec's p
 preset's time window are replaced, and the preset's last (or first) point is moved onto the rest of
 the curve, so a card can pop in and then keep a slow drift. Texts cannot fade with keyframes; pair a
 text `enter` with a catalog `intro` such as `fade_in` when it should also fade.
+
+## Eased keyframes
+
+A keyframe point is `[seconds, value]` or `[seconds, value, ease]`. The ease shapes the segment that
+**ends** at that point: `[[0, 1.0], [2, 1.5, "ease_out"]]` grows to 150% and slows into it. An ease on
+the first point has no segment to shape and does nothing. `"ease"` next to the properties is the
+default for every point without its own: `{"ease": "ease_in_out", "x": [[0, -0.2], [3, 0.2]]}`.
+`"linear"` (or no ease) keeps a straight line. Works in every visual `keyframes` (clips, overlays,
+texts, stickers) and on `motion`'s points (`{"motion": "push_in", "keyframes": {"ease": "ease_in_out"}}`);
+audio volume keyframes stay linear.
+
+| ease | CapCut preset | feel |
+|---|---|---|
+| `ease_in`, `ease_out`, `ease_in_out` | Ease In, Ease Out, Ease | gentle start / gentle landing / both |
+| `quad_in`, `quad_out`, `quad_in_out` | Quad In, Quad Out, Quad Ease | a little stronger |
+| `cubic_in`, `cubic_out`, `cubic_in_out` | Cubic In, Cubic Out, Cubic Ease | strong: fast start into a soft landing (`cubic_out`) is the snappy default for hits |
+| `circ_in_out` | Circular Ease | very slow ends, fast middle: a whip pan |
+| `back_in`, `back_out` | Rebound In, Rebound Out | pulls back before leaving / overshoots and settles (about 10%) |
+| `[x1, y1, x2, y2]` | custom curve | a CSS `cubic-bezier`; x1, x2 in 0..1, y may go outside 0..1 to overshoot |
+
+In CapCut a named ease shows as that preset on the keyframe (right-click > Show all presets).
+`"linear_keyframes": true` at the top level samples every curve into linear keyframes instead.
 
 ## Kinetic typography helpers
 

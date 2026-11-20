@@ -35,7 +35,7 @@
     },
     {
       "id": "still", "src": "media/photo.png", "duration": 2.5, "fit": "cover",
-      "keyframes": {"scale": [[0, 1.0], [-0.01, 1.2]], "rotation": [[0, -2], [-0.01, 2]]},
+      "keyframes": {"ease": "ease_in_out", "scale": [[0, 1.0], [-0.01, 1.2]], "rotation": [[0, -2], [-0.01, 2]]},
       "outro": {"name": "fade_out", "duration": 0.5}
     }
   ],

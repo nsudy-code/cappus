@@ -1,10 +1,15 @@
 """Eased entrance and exit presets, written out as keyframes.
 
-CapCut drafts hold only linear keyframes, so each curve is sampled into several points. That makes a
-"pop" or a "grow" feel smooth instead of mechanical. Every preset ends exactly on the item's resting
-state (its transform or style), so the item looks the same as without the preset once it has played.
+Each preset is one or two keyframe segments, each with a CapCut ease curve (easing.py): points are
+[time, value] or [time, value, ease], the ease shaping the segment that ends at that point. In CapCut
+the curve shows on the keyframe and can be changed there. A spec with "linear_keyframes": true gets
+the old form instead: every curve sampled into several linear keyframes. Every preset ends exactly on
+the item's resting state (its transform or style), so the item looks the same as without the preset
+once it has played.
 """
 from __future__ import annotations
+
+import easing
 
 # name -> (default duration, kinds it works on)
 ENTER = {
@@ -36,26 +41,18 @@ EXIT = {
 }
 
 
-def ease_out(t):
-    return 1 - (1 - t) ** 3
+# The curves the presets use (CapCut's own "Cubic Out" / "Cubic In" / "Cubic Ease" presets).
+ease_out, ease_in, ease_in_out = "cubic_out", "cubic_in", "cubic_in_out"
 
 
-def ease_in(t):
-    return t ** 3
-
-
-def ease_in_out(t):
-    return 4 * t ** 3 if t < 0.5 else 1 - (-2 * t + 2) ** 3 / 2
-
-
-def curve(a, b, t0, t1, fn=ease_out, n=6):
-    """[[time, value], ...] from a to b between t0 and t1, sampled from fn."""
-    return [[round(t0 + (t1 - t0) * i / n, 4), round(a + (b - a) * fn(i / n), 5)] for i in range(n + 1)]
+def curve(a, b, t0, t1, ease=ease_out):
+    """One eased segment from a to b between t0 and t1: [[t0, a], [t1, b, ease]]."""
+    return [[round(t0, 4), round(a, 5)], [round(t1, 4), round(b, 5), ease]]
 
 
 def _overshoot(a, peak, b, t0, t1, split=0.65):
     mid = t0 + (t1 - t0) * split
-    return curve(a, peak, t0, mid, ease_out, 5) + curve(peak, b, mid, t1, ease_in_out, 3)[1:]
+    return curve(a, peak, t0, mid, ease_out) + curve(peak, b, mid, t1, ease_in_out)[1:]
 
 
 def enter_points(name, dur, rest, kind, width=0.0):
@@ -66,42 +63,42 @@ def enter_points(name, dur, rest, kind, width=0.0):
     fade = kind == "overlay"
     out = {}
     if name == "slam":
-        out["scale"] = curve(1.9 * s, s, 0, dur, ease_out, 4)
+        out["scale"] = curve(1.9 * s, s, 0, dur, ease_out)
     elif name == "slam_tilt":
-        out["scale"] = curve(2.1 * s, s, 0, dur, ease_out, 4)
-        out["rotation"] = curve(r - 9, r, 0, dur, ease_out, 4)
+        out["scale"] = curve(2.1 * s, s, 0, dur, ease_out)
+        out["rotation"] = curve(r - 9, r, 0, dur, ease_out)
     elif name in ("whip_left", "whip_right"):
-        out["x"] = curve(x + (1.3 if name == "whip_left" else -1.3), x, 0, dur, ease_out, 4)
+        out["x"] = curve(x + (1.3 if name == "whip_left" else -1.3), x, 0, dur, ease_out)
     elif name in ("fall", "jump"):
-        out["y"] = curve(y + (0.35 if name == "fall" else -0.35), y, 0, dur, ease_out, 4)
+        out["y"] = curve(y + (0.35 if name == "fall" else -0.35), y, 0, dur, ease_out)
     elif name == "spin":
-        out["rotation"] = curve(r - 120, r, 0, dur, ease_out, 5)
-        out["scale"] = curve(0.3 * s, s, 0, dur, ease_out, 5)
+        out["rotation"] = curve(r - 120, r, 0, dur, ease_out)
+        out["scale"] = curve(0.3 * s, s, 0, dur, ease_out)
     elif name == "pop":
         out["scale"] = _overshoot(0.01 * s, 1.08 * s, s, 0, dur)
         if fade:
-            out["opacity"] = curve(0, o, 0, dur * 0.4, ease_out, 3)
+            out["opacity"] = curve(0, o, 0, dur * 0.4, ease_out)
     elif name == "punch":
-        out["scale"] = curve(1.25 * s, s, 0, dur, ease_out, 5)
+        out["scale"] = curve(1.25 * s, s, 0, dur, ease_out)
     elif name == "rise":
         out["y"] = curve(y - 0.06, y, 0, dur)
         if fade:
-            out["opacity"] = curve(0, o, 0, dur, ease_out, 4)
+            out["opacity"] = curve(0, o, 0, dur, ease_out)
     elif name == "drop":
         out["y"] = _overshoot(y + 0.08, y - 0.012, y, 0, dur, 0.7)
     elif name in ("slide_left", "slide_right"):
         start = x + (0.4 if name == "slide_left" else -0.4)
         out["x"] = curve(start, x, 0, dur)
         if fade:
-            out["opacity"] = curve(0, o, 0, dur * 0.6, ease_out, 3)
+            out["opacity"] = curve(0, o, 0, dur * 0.6, ease_out)
     elif name == "fade":
-        out["opacity"] = curve(0, o, 0, dur, ease_out, 4)
+        out["opacity"] = curve(0, o, 0, dur, ease_out)
     elif name in ("grow_left", "grow_right"):
         pts = curve(0.01, 1.0, 0, dur)
         edge = x - width / 2 if name == "grow_left" else x + width / 2
         sign = 1 if name == "grow_left" else -1
-        out["scale_x"] = [[t, k * s] for t, k in pts]
-        out["x"] = [[t, round(edge + sign * k * width / 2, 5)] for t, k in pts]
+        out["scale_x"] = [[p[0], p[1] * s, *p[2:]] for p in pts]
+        out["x"] = [[p[0], round(edge + sign * p[1] * width / 2, 5), *p[2:]] for p in pts]
     else:
         raise ValueError(name)
     return out
@@ -113,32 +110,27 @@ def exit_points(name, dur, total, rest, kind):
     t0, fade = total - dur, kind == "overlay"
     out = {}
     if name == "zoom_through":
-        out["scale"] = curve(s, 14 * s, t0, total, ease_in, 5)
+        out["scale"] = curve(s, 14 * s, t0, total, ease_in)
     elif name == "fade":
-        out["opacity"] = curve(o, 0, t0, total, ease_in, 4)
+        out["opacity"] = curve(o, 0, t0, total, ease_in)
     elif name == "shrink":
-        out["scale"] = curve(s, 0.01 * s, t0, total, ease_in, 5)
+        out["scale"] = curve(s, 0.01 * s, t0, total, ease_in)
     elif name == "sink":
-        out["y"] = curve(y, y - 0.06, t0, total, ease_in, 5)
+        out["y"] = curve(y, y - 0.06, t0, total, ease_in)
         if fade:
-            out["opacity"] = curve(o, 0, t0, total, ease_in, 4)
+            out["opacity"] = curve(o, 0, t0, total, ease_in)
     elif name in ("slide_left", "slide_right"):
-        out["x"] = curve(x, x + (-0.4 if name == "slide_left" else 0.4), t0, total, ease_in, 5)
+        out["x"] = curve(x, x + (-0.4 if name == "slide_left" else 0.4), t0, total, ease_in)
         if fade:
-            out["opacity"] = curve(o, 0, t0 + dur * 0.4, total, ease_in, 3)
+            out["opacity"] = curve(o, 0, t0 + dur * 0.4, total, ease_in)
     else:
         raise ValueError(name)
     return out
 
 
 def value_at(points, t):
-    """Linear interpolation through [[time, value], ...] (sorted)."""
-    if t <= points[0][0]:
-        return points[0][1]
-    for (t0, v0), (t1, v1) in zip(points, points[1:]):
-        if t0 <= t <= t1:
-            return v0 if t1 == t0 else v0 + (v1 - v0) * (t - t0) / (t1 - t0)
-    return points[-1][1]
+    """Value at t through [[time, value, ease?], ...] (sorted), following each segment's ease."""
+    return easing.value_at(points, t)
 
 
 def merge(base, added, window, where):

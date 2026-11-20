@@ -191,6 +191,10 @@ How the pieces behave:
 - `"enter"` / `"exit"` on overlays and texts (`pop`, `punch`, `rise`, `drop`, `slide_left`,
   `grow_left`, `fade`, ...) give eased motion that lands exactly on the item's resting place. Prefer
   them to hand-written keyframes; they combine with a slow drift on the same property.
+- Hand-written keyframes can be eased too: `[t, value, "ease_out"]` shapes the segment ending at that
+  point, and `"ease": "ease_in_out"` beside the properties sets the default. They land in CapCut as its
+  own ease presets, so the user can change them on the keyframe. Linear moves look mechanical: ease
+  camera moves (`ease_in_out`) and hits (`cubic_out`, `back_out` for a small overshoot).
 
 ### 4. Pick resources from the catalog, never from memory
 
