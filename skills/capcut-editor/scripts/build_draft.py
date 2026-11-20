@@ -1645,10 +1645,11 @@ def main() -> int:
     if args.check:
         report["status"] = "valid (not written; run without --check to create the draft)"
     else:
-        drafts = find_drafts_dir(args.drafts_dir)
-        if args.drafts_dir and drafts is None:
-            Path(args.drafts_dir).mkdir(parents=True, exist_ok=True)
+        if args.drafts_dir:  # always the folder asked for, made if needed; never a default instead
             drafts = Path(args.drafts_dir)
+            drafts.mkdir(parents=True, exist_ok=True)
+        else:
+            drafts = find_drafts_dir()
         if drafts is None:
             drafts = spec_path.parent / "capcut_drafts"
             drafts.mkdir(exist_ok=True)

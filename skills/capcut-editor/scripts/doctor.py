@@ -117,7 +117,10 @@ def main() -> int:
     else:
         report["drafts_dir"] = None
 
-    if not install and not drafts:
+    if args.drafts_dir and not drafts:
+        problems.append(f"The drafts folder {args.drafts_dir} given with --drafts-dir does not exist. Check the "
+                        "path (CapCut > Settings > Drafts location shows the one CapCut uses).")
+    elif not install and not drafts:
         if sys.platform in ("win32", "darwin"):
             problems.append("CapCut desktop is not installed (no app and no drafts folder found). The drafts this "
                             "skill makes open only in CapCut desktop (capcut.com/download). Without it, offer "

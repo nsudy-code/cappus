@@ -65,8 +65,14 @@ def drafts_dir_candidates(explicit=None) -> list:
 
 
 def find_drafts_dir(explicit=None):
-    """Locate CapCut's draft folder. Returns a Path or None."""
-    for path, _ in drafts_dir_candidates(explicit):
+    """Locate CapCut's draft folder. Returns a Path or None.
+
+    An explicit folder (--drafts-dir) is the only candidate: if it does not exist the result is None,
+    never one of the defaults, so a typo or a scratch folder cannot send drafts into the real CapCut folder."""
+    if explicit:
+        path = Path(explicit)
+        return path if path.is_dir() else None
+    for path, _ in drafts_dir_candidates():
         if path.is_dir():
             return path
     return None
