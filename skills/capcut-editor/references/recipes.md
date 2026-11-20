@@ -132,8 +132,9 @@ what good looks like, so every decision below is yours. Do not ask which clips t
    splits every file into shots and scores each 0-100 for sharpness, exposure, shake and motion,
    finds each shot's best window (`best.in` / `best.out`) and peak, drops duplicates (the same
    footage twice: copies, re-exports, edited versions), marks `similar_to` (the same scene twice),
-   and proposes `adjust` (color matching) and `reframe_x` (where the action is, for a vertical
-   crop). **Read `best.jpg`** before deciding: the score is technical, you are the art director. A
+   and proposes `adjust` (color matching) and `reframe_x` (where the subject is, for a vertical
+   crop), plus `reframe_path` when the subject moves across the frame in the best window (a walker,
+   a bird, a car) and a fixed crop would lose it. **Read `best.jpg`** before deciding: the score is technical, you are the art director. A
    silhouette, a dusk window or a deliberately soft shot can score low and still be the most
    beautiful frame; a sharp, well-exposed shot of nothing is still nothing.
 2. **Name the story from what you see** and pick its structure:
@@ -160,7 +161,9 @@ what good looks like, so every decision below is yours. Do not ask which clips t
    mood.
 6. **Reframe properly.** Horizontal footage on a vertical canvas: `"fit": "cover"` with
    `"transform": {"x": <reframe_x>}`, plus a slow `motion` (`push_in`, or a pan in the direction the
-   action moves). Vertical footage on a vertical canvas just uses `cover`. A wide shot with two
+   action moves). A shot with `reframe_path` follows its subject instead: `"transform": {"x_path":
+   <reframe_path>}` (copy it as is; its times are source seconds, so it fits any in/out inside the
+   best window) with `push_in` or no motion, never a pan (both move `x`). Vertical footage on a vertical canvas just uses `cover`. A wide shot with two
    people or a group loses someone in a vertical crop: use `"fit": "contain"` with
    `"background": "blur"` for it, or skip it.
 7. **Words on footage.** A title on the hook and a closing line, in the look's styles and the

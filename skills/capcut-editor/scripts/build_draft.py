@@ -187,6 +187,28 @@ def points(value, ctx, minimum=2, ease=False) -> list:
     return value
 
 
+def x_path(tr, ctx) -> list:
+    """transform.x_path: [[source_seconds, x], ...], times rising (scan_footage.py's reframe_path)."""
+    pts = points(tr["x_path"], f"{ctx}.x_path")
+    out = []
+    for pt in pts:
+        t = num(pt[0], f"{ctx}.x_path time", lo=0)
+        if out and t <= out[-1][0]:
+            raise SpecError(f"{ctx}.x_path: times must rise, got {t:g}s after {out[-1][0]:g}s")
+        out.append([t, num(pt[1], f"{ctx}.x_path value")])
+    return out
+
+
+def path_at(pts, t) -> float:
+    """The path's x at source time t (linear between points, held past the ends)."""
+    if t <= pts[0][0]:
+        return pts[0][1]
+    for (t0, x0), (t1, x1) in zip(pts, pts[1:]):
+        if t <= t1:
+            return x0 + (x1 - x0) * (t - t0) / (t1 - t0)
+    return pts[-1][1]
+
+
 # Value ranges per keyframe property (lo, hi, above).
 KF_RANGES = {"opacity": (0, 1, None), "volume": (0, None, None), "scale": (None, None, 0),
              "scale_x": (None, None, 0), "scale_y": (None, None, 0), "saturation": (-1, 1, None),
@@ -622,11 +644,15 @@ class Builder:
         kx, ky = self.width / mat.width, self.height / mat.height
         return max(kx, ky) / min(kx, ky)
 
-    def clip_settings(self, tr, base, ctx):
+    def clip_settings(self, tr, base, ctx, tin=0, speed=1.0):
         tr = tr or {}
-        check_keys(tr, {"scale", "scale_x", "scale_y", "x", "y", "rotation", "opacity", "flip_h", "flip_v"},
-                   f"{ctx}.transform")
+        keys = {"scale", "scale_x", "scale_y", "x", "y", "rotation", "opacity", "flip_h", "flip_v"}
+        check_keys(tr, keys | ({"x_path"} if tin is not None else set()), f"{ctx}.transform")
         c = f"{ctx}.transform"
+        if "x_path" in tr:
+            if "x" in tr:
+                raise SpecError(f"{c}: give x or x_path, not both (x_path already sets x over time)")
+            tr = dict(tr, x=path_at(x_path(tr, c), tin / 1e6))
         s = num(tr.get("scale", 1.0), f"{c}.scale", above=0)
         return cc.ClipSettings(
             alpha=num(tr.get("opacity", 1.0), f"{c}.opacity", lo=0, hi=1),
@@ -679,13 +705,22 @@ class Builder:
         seg = cc.VideoSegment(
             mat, cc.Timerange(start, int(round(sdur / speed))),
             source_timerange=cc.Timerange(tin, sdur), speed=speed, volume=volume,
-            clip_settings=self.clip_settings(c.get("transform"), base, ctx),
+            clip_settings=self.clip_settings(c.get("transform"), base, ctx, tin, speed),
         )
         seg._base = base
         seg._mat = mat
         if not photo:
             self.heard(self.path(c.get("src"), ctx), tin, sdur, speed, start, volume)
         return seg
+
+    @staticmethod
+    def clip_x(c, seg) -> float:
+        """The clip's horizontal offset (midway through it when it follows an x_path)."""
+        tr = c.get("transform") or {}
+        if "x_path" in tr:
+            mid = (seg.source_timerange.start + seg.source_timerange.duration / 2) / 1e6
+            return path_at(x_path(tr, "transform"), mid)
+        return float(tr.get("x", 0))
 
     def keyframes(self, seg, kf, ctx, base=1.0, allowed=None):
         if not kf:
@@ -816,13 +851,26 @@ class Builder:
             seg.add_fade(us(num(fd.get("in", 0), f"{ctx}.fade.in", lo=0)),
                          us(num(fd.get("out", 0), f"{ctx}.fade.out", lo=0)))
         kf = dict(c.get("keyframes") or {})
+        tr = dict(c.get("transform") or {})
+        if "x_path" in tr:  # follow a moving subject: source-time points become clip-time x keyframes
+            if "x" in kf:
+                raise SpecError(f"{ctx}: transform.x_path and keyframes both animate 'x'; keep only one")
+            pts = x_path(tr, f"{ctx}.transform")
+            tin, speed = seg.source_timerange.start / 1e6, seg.source_timerange.duration / dur
+            d = dur / 1e6
+            to_clip = lambda t: (t - tin) / speed
+            kf["x"] = ([[0, path_at(pts, tin)]]
+                       + [[round(to_clip(t), 3), x] for t, x in pts if 0 < to_clip(t) < d]
+                       + [[d, path_at(pts, tin + d * speed)]])
+            tr["x"] = kf["x"][0][1]  # what motion and enter/exit presets move around
         if c.get("motion"):
-            tr0 = c.get("transform") or {}
+            tr0 = tr
             off = {"x": float(tr0.get("x", 0)), "y": float(tr0.get("y", 0))}
             sc0 = float(tr0.get("scale", 1.0))
             for prop, pts in self.motion_keyframes(c["motion"], dur, ctx).items():
                 if prop in kf:
-                    raise SpecError(f"{ctx}: motion preset and keyframes both animate '{prop}'; keep only one")
+                    what = "transform.x_path" if prop == "x" and "x_path" in tr else "keyframes"
+                    raise SpecError(f"{ctx}: motion preset and {what} both animate '{prop}'; keep only one")
                 # the move happens around the clip's own transform (a reframed or scaled clip keeps it)
                 if prop in off:
                     pts = [[t, v + off[prop]] for t, v in pts]
@@ -837,7 +885,6 @@ class Builder:
                     raise SpecError(f"{ctx}: adjust and keyframes both set '{prop}'; keep only one")
                 v = num(v, f"{ctx}.adjust.{prop}", lo=-1, hi=1)
                 kf[prop] = [[0, v], [dur / 1_000_000, v]]
-        tr = c.get("transform") or {}
         s = float(tr.get("scale_x", tr.get("scale", 1.0)))
         if c.get("drift") and "scale" not in kf and not c.get("motion"):
             d = num(c["drift"], f"{ctx}.drift", lo=0, hi=1)
@@ -886,7 +933,7 @@ class Builder:
                     "src": seg._mat.path, "in": seg.source_timerange.start / 1e6, "start": cursor / 1e6,
                     "end": (cursor + seg.duration) / 1e6, "speed": float(c.get("speed", 1.0)),
                     "photo": seg._mat.material_type == "photo", "fit": c.get("fit") or "contain",
-                    "tx": float((c.get("transform") or {}).get("x", 0)), "w": seg._mat.width, "h": seg._mat.height})
+                    "tx": self.clip_x(c, seg), "w": seg._mat.width, "h": seg._mat.height})
                 self.register(c, "clip", cursor, seg.duration, track, Path(seg._mat.path).name)
                 cursor += seg.duration
             except ITEM_ERRORS as e:
@@ -1385,7 +1432,7 @@ class Builder:
                     raise SpecError(f"{ctx}: \"resource_id\" is required (see references/capcut-notes.md)")
                 start, dur = self.span(s, ctx)
                 seg = cc.StickerSegment(str(s["resource_id"]), cc.Timerange(start, dur),
-                                        clip_settings=self.clip_settings(s.get("transform"), 1.0, ctx))
+                                        clip_settings=self.clip_settings(s.get("transform"), 1.0, ctx, None))
                 self.keyframes(seg, s.get("keyframes"), ctx, allowed=TEXT_KF)
                 track = self.place(cc.TrackType.sticker, s.get("track", "stickers"), seg.target_timerange)
                 self.script.add_segment(seg, track)

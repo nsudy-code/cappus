@@ -220,7 +220,9 @@ ekspor, terutama bagian yang Claude minta untuk dicek.
 4. Putar dari awal. Yang paling sering perlu disesuaikan:
    - ukuran dan posisi teks,
    - volume musik dibandingkan suara orang bicara,
-   - posisi subjek pada video horizontal yang dipotong jadi vertikal.
+   - posisi subjek pada video horizontal yang dipotong jadi vertikal. Kalau subjeknya bergerak
+     melintasi layar (orang berjalan, burung, mobil), potongannya sudah mengikuti lewat beberapa
+     keyframe posisi; geser keyframe itu di CapCut kalau masih kurang pas.
 5. Ekspor dari CapCut seperti biasa.
 
 ## 6. Revisi
