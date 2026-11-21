@@ -23,8 +23,26 @@ resources your account can export.
 *90 seconds on YouTube: one folder of 22 clips, from installing cappus to a finished, editable
 CapCut reel.*
 
+## What it can do
+
+An AI video editor for CapCut desktop, driven by Claude Code. Ask in plain language, for example
+"cut this into a 30-second TikTok with captions", and get a CapCut project, not a flat export.
+
+- **Auto edit a pile of footage** into one video with a hook, body and payoff, synced to the music beat.
+- **Auto captions** transcribed from the speech (offline, faster-whisper), word by word, with keyword highlight.
+- **Talking-head edits**: jump cuts that remove silences, fillers and retakes, punch-ins, eased zoom-ins
+  on key words, face tracking, and finding the best 20–60 s clips for Shorts in a long recording.
+- **TikTok, Instagram Reels and YouTube Shorts formats**: 9:16 reframing that follows the moving subject.
+- **Designed looks**: title and caption styles, fonts, motion presets, filters, effects and transitions
+  from CapCut's own library (about 5,000 resources, free and Pro).
+- **Eased keyframes** written as real CapCut ease curves, editable in CapCut's keyframe graph.
+- **Audio**: generated royalty-free music and sound effects (whoosh, pop, hit, riser), loudness to −14 LUFS,
+  noise reduction.
+- **Preview** an approximate render with ffmpeg before you open CapCut.
+
 ## Contents
 
+- [What it can do](#what-it-can-do)
 - [How it works](#how-it-works)
 - [Requirements](#requirements)
 - [Installation](#installation)
