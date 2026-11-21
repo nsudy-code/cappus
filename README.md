@@ -15,7 +15,7 @@ Works with **free CapCut and CapCut Pro**. You choose which one you have, and ca
 resources your account can export.
 
 Built for Claude Code, and usable from other AI coding agents that read Agent Skills (Codex, GitHub
-Copilot, Cursor, Gemini CLI): see [Other AI agents](#other-ai-agents).
+Copilot, Cursor, Gemini CLI, Google Antigravity): see [Other AI agents](#other-ai-agents).
 
 > Panduan berbahasa Indonesia: [docs/cara-pakai.md](docs/cara-pakai.md)
 
@@ -144,7 +144,18 @@ macOS or Linux:
 mkdir -p ~/.agents/skills && ln -s "$PWD/cappus/skills/capcut-editor" ~/.agents/skills/capcut-editor
 ```
 
-Each tool also has its own folder (`~/.copilot/skills`, `~/.cursor/skills`, `~/.gemini/skills`)
+**Google Antigravity** keeps its global skills in `~/.gemini/config/skills` instead (older
+versions: `~/.gemini/antigravity/skills`). Link the skill there too:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.gemini\config\skills" | Out-Null; New-Item -ItemType Junction -Path "$env:USERPROFILE\.gemini\config\skills\capcut-editor" -Target "$PWD\cappus\skills\capcut-editor"
+```
+
+```bash
+mkdir -p ~/.gemini/config/skills && ln -s "$PWD/cappus/skills/capcut-editor" ~/.gemini/config/skills/capcut-editor
+```
+
+Each other tool also has its own folder (`~/.copilot/skills`, `~/.cursor/skills`, `~/.gemini/skills`)
 if yours does not pick up `~/.agents/skills`. Restart the agent afterwards and ask it to list its
 skills to check. An agent without skill support can still use cappus: open it in the clone and
 ask it to read `skills/capcut-editor/SKILL.md` first ([AGENTS.md](AGENTS.md) tells it so).

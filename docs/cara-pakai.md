@@ -47,7 +47,7 @@ efek Pro (lihat [bagian 8](#8-capcut-pro)).
 - **Python 3.9 atau lebih baru.**
 - **ffmpeg dan ffprobe** yang bisa dipanggil dari terminal.
 - **AI agent yang berjalan di komputer yang sama dengan CapCut**, misalnya Claude Code atau tab Code
-  di aplikasi Claude desktop. Agent lain seperti Codex, GitHub Copilot, Cursor dan Gemini CLI juga
+  di aplikasi Claude desktop. Agent lain seperti Codex, GitHub Copilot, Cursor, Gemini CLI dan Google Antigravity juga
   bisa (lihat [Memakai agent selain Claude](#memakai-agent-selain-claude)). Chat di browser (Claude.ai,
   ChatGPT, Gemini) tidak bisa menulis ke folder CapCut Anda.
 
@@ -129,7 +129,18 @@ macOS atau Linux:
 mkdir -p ~/.agents/skills && ln -s "<repo>/skills/capcut-editor" ~/.agents/skills/capcut-editor
 ```
 
-Kalau agent Anda tidak membaca `~/.agents/skills`, pakai folder khususnya: `~/.copilot/skills`,
+**Google Antigravity** menyimpan skill global di `~/.gemini/config/skills` (versi lama:
+`~/.gemini/antigravity/skills`), jadi buat link ke sana juga:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.gemini\config\skills" | Out-Null; New-Item -ItemType Junction -Path "$env:USERPROFILE\.gemini\config\skills\capcut-editor" -Target "<repo>\skills\capcut-editor"
+```
+
+```bash
+mkdir -p ~/.gemini/config/skills && ln -s "<repo>/skills/capcut-editor" ~/.gemini/config/skills/capcut-editor
+```
+
+Kalau agent lain tidak membaca `~/.agents/skills`, pakai folder khususnya: `~/.copilot/skills`,
 `~/.cursor/skills` atau `~/.gemini/skills`. Copilot dan Cursor juga membaca `~/.claude/skills`, jadi
 kalau sudah memakai Cara B, link ini tidak perlu. Agent yang belum mendukung skill tetap bisa: buka
 agent di folder repo dan minta dia membaca `skills/capcut-editor/SKILL.md` dulu (file `AGENTS.md`
