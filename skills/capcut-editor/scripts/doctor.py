@@ -154,6 +154,13 @@ def main() -> int:
         notes.append("Optional: captions from speech need faster-whisper: "
                      f'"{sys.executable}" -m pip install -r "{SKILL / "requirements-captions.txt"}"')
 
+    report["face_detection"] = package("opencv-python-headless", "cv2")
+    if report["face_detection"] and report["face_detection"].split(".")[0] not in ("4", "installed"):
+        report["face_detection"] = None  # OpenCV 5 dropped the face cascades faces.py uses
+    if not report["face_detection"]:
+        notes.append("Optional: framing talking heads on the face (faces.py, used by cut_talk.py) needs "
+                     f'OpenCV 4: "{sys.executable}" -m pip install -r "{SKILL / "requirements-faces.txt"}"')
+
     report["website_capture"] = package("playwright", "playwright")
     if not report["website_capture"]:
         notes.append("Optional: capturing a website for a promo (site_capture.py) needs Playwright: "

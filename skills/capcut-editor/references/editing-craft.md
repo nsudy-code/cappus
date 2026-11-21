@@ -41,7 +41,7 @@ so lean on these rules and on what you saw in the contact sheets.
 | Hype / beat montage | 1 beat (0.4-0.6 s at 100-140 BPM), longer shots every 4-8 beats for breathing room |
 | Travel / lifestyle vlog | 1.5-3 s; hero shots 3-5 s |
 | Cinematic / emotional | 3-6 s, slower speed (0.5-0.8 with 60 fps source) |
-| Talking head | cut every pause; punch-in (scale 1.15-1.3) every 5-10 s or at each new point |
+| Talking head | cut every pause (`cut_talk.py`); framing alternates 1.0 / 1.15-1.25 at the cuts; B-roll 1.2-2.5 s |
 | Product promo | 1-2 s per feature, hold 2-3 s on the hero/end card |
 | Photo slideshow | 1.5-3 s per photo, synced to beats when there is music |
 
@@ -77,21 +77,56 @@ the user asks. Trim more than feels comfortable; the first draft is almost alway
 
 ### Talking head / explainer / podcast clip
 
-1. `transcribe.py talk.mp4` and `probe.py talk.mp4 --silence`. Read the transcript like a script:
-   mark the sentences worth keeping, the flubbed takes (a sentence said twice - keep the last clean
-   one), the false starts and long "umm" stretches. Whisper often leaves fillers out of the text, so
-   a gap between two word times with sound in it (`sound_segments`) is usually a filler or a breath.
-2. Each kept stretch becomes its own main clip with the same `src` - that is a jump cut. Put `in` about
-   0.08-0.15 s before the first word's `start` and `out` the same after the last word's `end`, and
-   check against `sound_segments` so no word is clipped. Cut between words, never inside one.
-3. Alternate framing at each jump: odd clips `transform.scale` 1.0, even clips 1.15-1.25 (centered on
-   the face; adjust `y` so the head is not cropped). Hides the jump and adds energy.
-4. Captions: `{"transcript": "talk.transcript.json"}` with `max_words` 2-4, uppercase or bold,
-   high-contrast stroke, placed in the lower-middle. They follow the cuts automatically. Highlight
-   keywords with a separate text item in an accent color if it fits.
-5. B-roll overlays over the main clip when the speaker mentions something showable; mute them.
-6. Hook: start on the most interesting sentence, even if it is from the middle (reorder clips).
-7. No music, or quiet music (volume 0.1-0.2) ducked under speech.
+1. `transcribe.py talk.mp4`, then `cut_talk.py talk.mp4` (add `--hook-first` for a teaser, `--look`,
+   `--broll` files). It does steps 2-3 and writes `talk.cut.json` with captions from
+   `talk.cut.transcript.json` (the kept words, their times snapped into the clips so Whisper's drift
+   around pauses drops no caption). Read its report like a script: `removed` says what went and why
+   (`pause`, `filler`, `retake` with the `kept_take`, `repeat`); put a clip back if a cut took
+   something meant. Whisper often writes a hesitation as "a" / "e" or leaves it out; `cut_talk.py`
+   drops a short burst of sound between two silences that carries no real word.
+2. What it does, if you place cuts by hand: each kept stretch is its own main clip with the same
+   `src` (a jump cut), `in` ~0.12 s before the first word, `out` ~0.12 s after the last, pauses over
+   0.35 s cut, cutting between words, never inside one.
+3. Framing changes at a cut once a framing has held 1 s: `transform.scale` 1.0, then 1.15-1.25 with
+   `x`/`y` moved so the face stays where it was. `cut_talk.py` finds the face with `faces.py` when
+   OpenCV is installed (a 16:9 shot is also cropped to 9:16 around the face, with `transform.x_path`
+   when the speaker walks, and captions move off a face that sits low); without it, look at a frame
+   and pass `--face-y`, the face's height from the top. Use `faces.py`'s `title_y` for a title so it
+   doesn't cover the face. A punch-in
+   on a jump hides it; a framing that changes every half second is tiring, so after a clip shorter
+   than 1 s the framing stays (`--punch-hold`).
+4. Hook in the first 2 s: open on the line the report ranks first (a contradiction, warning, number
+   or question; `--hook-first` plays it as a teaser before the talk), and state the promise as a title
+   over it ("3 MITOS INI TERNYATA BENAR", style `title`, on `@hook`). The report's `hooks` are a
+   ranking by words, not judgement: read the top three and pick.
+5. Captions: 2-4 words (`max_words` 3), bold, size 11-12, in the lower-middle or at chest height;
+   the one keyword per line that carries the meaning in the accent color and bigger
+   (`captions.keywords`; `cut_talk.py` picks one per sentence: a number, else the longest uncommon
+   word; check its `keywords` report and swap any that miss the point). For podcasts, light up the
+   word being said (`captions.highlight`). The looks `edu` and `talk` set all of this. On a funny or
+   shocking line, a punch-in plus a caption in another color marks it. Introduce the speaker once
+   with a lower third (`--speaker`, `--role`: name in an accent box, role under it, ~3.5 s, just
+   after the hook). For a series, the same look every episode is part of the brand: save it once
+   (`presets.py`) and cut every episode with `--preset`.
+6. B-roll: full-frame cutaways (`"fit": "cover"`, `"mute": true`, track `broll`) of 1.2-2.5 s, each
+   starting on the word that names what it shows, the voice running on underneath. Up to about a
+   quarter of the runtime; a run of 2-4 shots on the payoff works as a montage. `broll_slots` in the
+   report proposes where (one every ~6 s, `--broll-every`), with what is said and its key words, so
+   matching footage goes where the words name it. No footage that fits: leave the slot empty rather
+   than cover the face with something unrelated.
+7. Lists ("5 apps", "3 tips"): a header at the top while each point runs (number + name, style
+   `label` or `title`), and change the framing at each new point.
+8. No music, or quiet music (volume 0.1-0.2) ducked under speech.
+9. From a long recording, a clip must stand alone: it opens on its own claim, not on "so, as I
+   said", and ends where the thought ends. `shorts.py` picks such stretches; read each opening line,
+   since the first two seconds decide the watch.
+
+Seen in real shorts (Nov 2026): a podcast clip that only cuts dead air and captions 1-3 words at
+chest height; a listicle with a header per point and the framing changing per point; a story told in
+voice-over over B-roll that changes every ~2.5 s with karaoke captions (spoken words dark, upcoming
+grey); a doctor's myth-busting clip with a red title on a white box for the first 2 s, stock B-roll of
+1.2-2 s on the concrete nouns (about 28% of the runtime), a punch-in with a red caption on the joke,
+and a stock montage at the end.
 
 ### Cinematic vlog / mood piece
 
@@ -204,7 +239,9 @@ busy backgrounds give rough edges, so name those shots as things to check at han
 
 ## Sound
 
-- Music under speech: 0.1-0.25 or `duck`. Music alone: 0.5-0.8 (normalize by ear in CapCut).
+- Level first: `"loudness": true` brings speech and music to -14 LUFS, then `volume` sets the mix.
+  A noisy room: `"denoise": true` on the speech clips (Pro).
+  Music under speech: 0.1-0.25 or `duck`. Music alone: 0.5-0.8.
 - Always fade music: in 0.1-0.5 s (or start on a downbeat with no fade), out 0.8-2 s.
 - Start the song where it is good; the intro of most songs is too slow for short-form.
 - Mute or lower (0.2-0.4) natural sound on B-roll unless it adds something (waves, crowd cheer).

@@ -1,0 +1,3 @@
+# Optional: face detection for framing talking heads (scripts/faces.py, used by cut_talk.py).
+# OpenCV 4 bundles the face cascades; OpenCV 5 moved them out, so stay below 5.
+opencv-python-headless>=4.5,<5

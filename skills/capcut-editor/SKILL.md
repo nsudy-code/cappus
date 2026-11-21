@@ -94,7 +94,12 @@ python <skill>/scripts/probe.py clip1.mp4 --sheet <scratch_dir> --from 12 --to 1
 python <skill>/scripts/probe.py clip1.mp4 --scenes        # shot changes inside a long file
 python <skill>/scripts/probe.py talk.mp4 --silence        # speech segments, for cutting dead air
 python <skill>/scripts/probe.py song.mp3 --beats          # bpm, beat times, downbeats, energy curve
+python <skill>/scripts/probe.py talk.mp4 --loudness       # LUFS and peak (the spec's "loudness" levels them)
 python <skill>/scripts/transcribe.py talk.mp4             # what is said, with a time for every word
+python <skill>/scripts/cut_talk.py talk.mp4               # talking head -> jump-cut spec, hooks, B-roll slots
+python <skill>/scripts/faces.py talk.mp4                  # where the face is: crop, punch-in, text spots
+python <skill>/scripts/presets.py                         # saved series presets (look, colors, handle, logo)
+python <skill>/scripts/shorts.py long.mp4 --count 3       # the best 20-60 s clips of a long talk, one spec each
 ```
 
 **Many clips?** Sort them first: `python <skill>/scripts/scan_footage.py <folder> --out <scratch_dir>/scan`
@@ -129,6 +134,23 @@ The builder maps each word through the clips that play that file, so captions st
 jump cuts, reordering and speed changes, and words in the parts you cut are left out
 (`references/edit-spec.md`).
 
+**Someone talking to camera** (talking head, explainer, podcast clip, doctor or teacher tips): after
+`transcribe.py`, run `cut_talk.py talk.mp4` instead of placing the cuts by hand. It writes
+`talk.cut.json`, a spec with the pauses, fillers ("um", "eh") and flubbed takes cut out (the last take
+of a restarted line is kept), punch-ins alternating with the cuts, and captions. With OpenCV
+installed (`requirements-faces.txt`; `doctor.py` says) it finds the face: a wide shot is cropped to
+vertical around it (following the speaker who moves), punch-ins keep it in place, and captions move
+off it; without OpenCV, pass `--face-y` (the face's height from the top) after looking at a frame.
+Pass a look: `--look edu` for an expert explaining (doctor, teacher, tips: bigger captions, one
+keyword per sentence in the accent color, red-on-white hook title) or `--look talk` for podcasts,
+interviews and kajian (capital captions, the word being said lights up); `looks.py suggest` picks
+between them from the user's words. `--speaker "dr. Aisya" --role "Dokter Umum"` adds a lower
+third. It prints what it cut
+and why, the lines ranked as hooks, and B-roll slots with what is said in each. Read the `removed`
+list, above all every `retake`, then edit the spec as usual: `--hook-first` opens on the best hook as a
+teaser, `--broll a.mp4 b.mp4` fills the slots, or put the user's footage into the slots by hand where
+the words name something it shows. Follow "Talking head" in `references/editing-craft.md`.
+
 ### 3. Plan the edit, briefly, then write the spec
 
 Read `references/recipes.md` when the request matches one (a website promo, photos or clips to a
@@ -148,6 +170,23 @@ colors, text styles with motion, card motion, transitions, music mood and BPM); 
 shows one. Put `"look": "<name>"` and `"brand": {"accent": "#RRGGBB"}` in the spec and use the
 styles `title`, `accent`, `big`, `label` (captions get `caption`). Other fonts: `scripts/fonts.json`
 has 50 free fonts picked by eye, with roles and moods.
+
+**Series presets.** When the user makes the same kind of video again and again (a doctor's weekly
+tips, a kajian series, one brand), keep its look in a preset so every episode matches:
+`presets.py save dr-aisya --look edu --accent "#14B8A6" --speaker "dr. Aisya" --role "Dokter Umum"
+--handle "@dr.aisya" --logo logo.png`, or `--from-spec ep1.cut.json` after an edit the user liked.
+Then `"preset": "dr-aisya"` in a spec, or `cut_talk.py talk.mp4 --preset dr-aisya`, brings the
+look, colors, caption settings, cut settings, lower third, handle and logo; anything set in the
+spec or on the command line still wins. Run `presets.py` first when the user names a series or a
+person you may have a preset for, and offer to save one after a talking-head edit they liked.
+
+**One long recording, several shorts.** For a podcast, kajian, class or live replay, transcribe it
+once, then `shorts.py long.mp4 --count 3` ranks every run of whole sentences 20-60 s long (opens on
+a claim, number, question or "you"; never on "jadi"/"and so"; no long break inside; ends on a
+finished sentence) and cuts the best ones that don't overlap into `long.short1.cut.json`, ... through
+`cut_talk.py --from --to`. Other flags (`--look`, `--preset`, `--denoise`, `--speaker`) go to every
+short. Show the user each short's `opening` line and `why` before building; `--list` ranks
+without writing. The edits come out shorter than `seconds` (pauses and retakes are cut).
 
 **No music from the user?** Generate it: `python <skill>/scripts/music.py media/music.wav --mood
 hype --bpm 124 --length 30 --drop 4 --breath 16 --end-hit 24` writes the track and
@@ -263,8 +302,9 @@ can show: each shot frames the subject (cover crop, `transform.x` reframing, pus
 where planned, texts and captions appear at the right times, sit inside the safe zone and do not
 collide, nothing runs past the end. Add `--every 0.5` to look closer. Fix the spec, rebuild the draft
 and render again until the sheet looks right. The preview is an approximation: effects, filters,
-transitions, animations, masks and the real fonts are not drawn (the report lists them under
-`not_drawn`), so never judge the look from it. In the handover, say you checked a preview render, not
+transitions, animations and masks are not drawn (the report lists them under `not_drawn`), so never
+judge the look from it. Texts use the real font files from CapCut's cache; `fonts` in the report says
+which ones stood in because CapCut has not downloaded them yet. In the handover, say you checked a preview render, not
 the draft in CapCut. If you did neither, say you have not watched the render.
 
 Write the handover for someone who is not an editor: what to open and press, then what they can
@@ -314,7 +354,11 @@ The full guidance is in `references/editing-craft.md`. The rules that matter mos
 - **Text must be readable in half a second.** Short lines, heavy weight, stroke or shadow for contrast,
   on screen long enough to read twice, inside the platform safe zone.
 - **Sound is half the edit.** Fade music in and out, duck it under speech, mute clip audio that is just
-  wind and handling noise.
+  wind and handling noise. Put `"loudness": true` in any spec with speech or music so every file starts
+  at -14 LUFS (`cut_talk.py` does); if the report says a peak held a file back, tell the user to select
+  it in CapCut > Audio > Normalize loudness. A noisy recording (hum, fan, street) gets `"denoise": true`
+  on its clips, or `cut_talk.py --denoise` (CapCut Pro); on a free plan, tell the user to switch on
+  Audio > Isolate voice on the clip.
 
 ## Reference files
 

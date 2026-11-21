@@ -27,10 +27,12 @@ One JSON object. All times are **seconds**. Unknown keys are rejected (typos get
 | `width`, `height` | 1080, 1920 | Canvas. 9:16 = 1080x1920, 16:9 = 1920x1080, 1:1 = 1080x1080, 4:5 = 1080x1350. |
 | `fps` | 30 | Match the footage when it is consistently 24/25/60. CapCut projects run at 24, 25, 30, 50 or 60; any other value (29.97, 59.94) is rounded to the nearest with a warning. |
 | `allow_pro` | user's plan | Omit it normally: Pro is then allowed exactly when the user's saved plan is Pro (`tier.py`). Set `false` to force a free-only draft (e.g. it will be exported from a free account), `true` only if the user has Pro but it is not saved. |
+| `preset` | none | A saved series preset (`presets.py` lists them): fills in `look`, `brand`, `fonts`, styles and caption settings the spec does not set, adds keyword words to the spec's, and puts the handle (track `brand`) and logo (track `logo`) on screen for the whole video. The spec's own values win. |
 | `look` | none | A tested look (`looks.py` lists them): adds the styles `title`, `accent`, `big`, `label` and `caption`, and captions use `caption` by default. Spec `styles` with the same name override the look's key by key. |
 | `fonts` | look's pairing | `{"headline": "bebas", "body": "kilig"}`: swap the look's fonts for another curated pairing (see `looks.py <look>`, `pairings`). Sizes are scaled by the fonts' measured widths. Only with `look`. |
 | `brand` | look's colors | `{"accent": "#F59E0B", "text": "#FFFFFF", "muted": "#94A3B8"}`: the brand colors the look's styles use. Only with `look`. |
 | `styles` | {} | Named text styles, reused via `"style": "<name>"`. |
+| `loudness` | off | `true` (-14 LUFS), a target like `-16`, or `{"target": -14, "peak": -1}`: measures each audible clip's and audio item's file (ffmpeg, EBU R128) and multiplies its `volume` by the gain that brings it to the target, so speech, music and voice-over start level with each other and with the platforms. A gain is held so the loudest peak stays under `peak` dBTP (`null`: no limit); the report's `loudness` lists every file, its gain and any held by a peak. `"loudness": false` on an item keeps its own level. `volume` still counts on top: music at 0.3 sits ~10 dB under the speech. |
 | `linear_keyframes` | false | `true` writes every eased curve (keyframe `ease`, motion presets) as several linear keyframes instead of a CapCut curve: the fallback for a CapCut build that shows the curves wrong. |
 | `video` | required | Main-track clips, in playback order. |
 | `overlays`, `audio`, `sfx`, `texts`, `captions`, `effects`, `filters`, `stickers` | [] | See below. |
@@ -95,6 +97,7 @@ Vertical-video safe zone (platform UI covers the rest): keep text within `y` fro
 | `blend` | Blend mode: `screen`, `overlay`, `multiply`, `soft_light`, `hard_light`, `lighten`, `darken`, `color_dodge`, `color_burn`, `linear_burn`. Meaningful on overlays. |
 | `chroma` | Green screen: `{"color": "#00FF00", "intensity": 20, "shadow": 0}`. |
 | `adjust` | A constant color correction: `{"brightness": -0.1, "contrast": 0.05, "saturation": 0.08}`, each -1..1 (0 = unchanged). `scan_footage.py` proposes it to make shots match. Not together with `keyframes` on the same property. |
+| `denoise` | `true` (or a strength 0.05-1, default 0.85) switches on CapCut's Audio > Reduce noise for this clip: hum, fans, traffic and room noise drop while the voice stays. **CapCut Pro feature**, rejected unless Pro is allowed; needs CapCut desktop installed on this computer (its noise model is referenced from the install). It runs live, so nothing is processed first. Enhance voice and Isolate voice cannot be set from a spec (CapCut makes a processed copy of the sound for them): tell the user the one click, select the clip > Audio > Enhance voice (Pro) or Isolate voice (free). |
 | `remove_bg` | `true` turns on CapCut's Remove BG > Auto removal, which cuts the person or main subject out of a video or image. **CapCut Pro feature**: it is rejected unless Pro is allowed. CapCut computes the cutout the first time the draft opens, a few seconds per clip. Below a cutout on the main track there is only black, so to put someone on a new background, place the background on the main track and the person in an overlay with `remove_bg`. |
 
 ## Motion presets: enter and exit
@@ -214,7 +217,9 @@ light-leak/dust footage with `"blend": "screen"`, logo PNG in a corner.
 | `src`, `at` | File and timeline start. |
 | `in`, `out` | Source range. `in` picks where in the song to start. |
 | `duration` / `end` | Timeline length instead of `out`. `"end": "end"` trims to the main track. If the file is too short you get a warning, not a loop - add a second item. |
-| `volume` | 1 = original. Music under speech ~0.15-0.3; music alone ~0.5-0.8; voice-over 1.0. |
+| `volume` | 1 = original (with top-level `loudness`: 1 = the target). Music under speech ~0.15-0.3; music alone ~0.5-0.8; voice-over 1.0. |
+| `loudness` | `false` leaves this item out of the top-level levelling. |
+| `denoise` | As for video clips: CapCut's Reduce noise (Pro). |
 | `fade` | `{"in", "out"}` seconds. |
 | `duck` | Lowers volume to `to` x volume during each timeline range (with `ramp` s slopes) via volume keyframes. |
 | `keyframes` | `{"volume": [[t, v], ...]}` - manual automation, t from the item's start. |
@@ -317,6 +322,8 @@ Burned-in style subtitles as individual editable text segments. Exactly one sour
 | `offset` | 0 | Extra shift in seconds, applied last. |
 | `min_duration` | 0.35 | Shortest time a cue stays on screen. |
 | `style`, `track` | caption look, `"captions"` | As for texts. Default look: size 9, bold, white, black stroke, `y = -0.6`. |
+| `highlight` | none | `true` or `{"color", "upcoming", "scale"}`: the word being said takes `color` (default the look's accent, else yellow); with `upcoming`, words not said yet take that color (karaoke). Needs word times. |
+| `keywords` | none | `["90%", "dehidrasi"]` or `{"words", "color", "scale"}`: these words are always in `color` (default the accent) and `scale` times bigger (1.2). |
 
 **Source times and the timeline.** With a `source`, every time is a position in that file, and the
 builder places each word through the clips that play it with sound (main track, overlays and audio
@@ -333,6 +340,11 @@ Grouping from words: a new cue starts at `max_words`, `max_chars`, a pause longe
 punctuation (`. ? ! , ; :`) or a cut. A short joining word such as "the", "and", "yang" or "di" moves to
 the start of the next cue instead of ending one. Languages written without spaces (Chinese, Japanese,
 Thai, ...) are joined without spaces when the transcript says so.
+
+With `highlight`, each cue is placed once per word, the same text each time with the word being said
+in color, so it reads as one caption lighting up word by word. Colors and sizes are per word inside
+one CapCut text (CapCut's own rich-text styles), so they stay editable. `"$accent"`, `"$text"` and
+`"$muted"` take the look's (or brand's) colors.
 
 `captions` may also be a list of such objects, for example two languages on two tracks.
 

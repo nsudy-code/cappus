@@ -356,6 +356,8 @@ def test_adjust_conflicts_with_keyframes_on_the_same_property(tmp_path, media):
     ("flash sale produk baru", "bold_promo"),
     ("jualan kopi di cafe", "playful"),
     ("liburan ke pantai", "cinematic"),
+    ("tips kesehatan dari dokter", "edu"),
+    ("potongan podcast kajian", "talk"),
 ])
 def test_suggest_matches_the_theme(theme, look):
     assert looks.suggest(theme, seed=1)["spec"]["look"] == look
