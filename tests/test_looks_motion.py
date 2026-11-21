@@ -199,6 +199,17 @@ def test_music_writes_audio_and_an_exact_beat_map(tmp_path):
     assert [s["name"] for s in beats["sections"]] == ["intro", "drop"]
 
 
+def test_music_snaps_a_drop_that_rounds_to_zero_up_to_the_first_bar(tmp_path):
+    out = tmp_path / "m.wav"
+    res = run("music.py", out, "--mood", "cinematic", "--bpm", "84", "--length", "26", "--drop", "1",
+              "--end-hit", "22.7", "--seed", "7")
+    assert res.returncode == 0, res.stderr
+    printed = json.loads(res.stdout)
+    assert printed["drop"] == 2.857 and "snapped up to the first bar" in printed["drop_note"]
+    beats = json.loads(out.with_suffix(".beats.json").read_text(encoding="utf-8"))
+    assert beats["drop"] == 2.857 and beats["sections"][0] == {"name": "intro", "start": 0.0, "end": 2.857}
+
+
 @pytest.mark.parametrize("args, message", [
     (["--bpm", "300"], "--bpm must be between 60 and 180"),
     (["--length", "8", "--drop", "20"], "--drop 20.0s is outside the track"),
@@ -356,6 +367,8 @@ def test_adjust_conflicts_with_keyframes_on_the_same_property(tmp_path, media):
     ("flash sale produk baru", "bold_promo"),
     ("jualan kopi di cafe", "playful"),
     ("liburan ke pantai", "cinematic"),
+    ("tips kesehatan dari dokter", "edu"),
+    ("potongan podcast kajian", "talk"),
 ])
 def test_suggest_matches_the_theme(theme, look):
     assert looks.suggest(theme, seed=1)["spec"]["look"] == look

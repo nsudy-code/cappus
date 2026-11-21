@@ -7,6 +7,7 @@
   probe.py a.mp4 --scenes                      # shot-change timestamps
   probe.py talk.mp4 --silence                  # silent gaps + speech segments (for jump cuts)
   probe.py song.mp3 --beats                    # tempo and beat timestamps (for cutting on the beat)
+  probe.py talk.mp4 song.mp3 --loudness        # LUFS and true peak, to level speech and music
 
 Output is JSON on stdout. Needs ffmpeg/ffprobe on PATH (--beats also needs numpy).
 """
@@ -106,6 +107,24 @@ def silence(path: Path, meta: dict, noise_db: float, min_len: float) -> dict:
             "hint": "use sound_segments as in/out pairs (pad ~0.1s) to cut dead air"}
 
 
+def loudness(path: Path) -> dict | None:
+    """Integrated loudness (LUFS, EBU R128: silence is gated out) and true peak (dBTP) of a file's
+    sound, or None when it has none."""
+    r = run(["ffmpeg", "-hide_banner", "-nostats", "-i", str(path), "-vn", "-af",
+             "loudnorm=print_format=json", "-f", "null", "-"])
+    m = re.search(r"\{[^{}]*\"input_i\"[^{}]*\}", r.stderr)
+    if not m:
+        return None
+    data = json.loads(m.group(0))
+    try:
+        lufs, peak = float(data["input_i"]), float(data["input_tp"])
+    except (KeyError, ValueError):
+        return None
+    if not math.isfinite(lufs) or lufs < -70:  # silent
+        return None
+    return {"lufs": round(lufs, 1), "peak_db": round(peak, 1)}
+
+
 def beats(path: Path) -> dict:
     try:
         import numpy as np
@@ -178,6 +197,7 @@ def main() -> int:
     ap.add_argument("--noise-db", type=float, default=-35.0)
     ap.add_argument("--min-silence", type=float, default=0.4)
     ap.add_argument("--beats", action="store_true")
+    ap.add_argument("--loudness", action="store_true")
     args = ap.parse_args()
 
     if not shutil.which("ffprobe") or not shutil.which("ffmpeg"):
@@ -200,6 +220,8 @@ def main() -> int:
                 meta["silence"] = silence(path, meta, args.noise_db, args.min_silence)
             if args.beats and (meta["kind"] == "audio" or meta.get("has_audio")):
                 meta["beats"] = beats(path)
+            if args.loudness and (meta["kind"] == "audio" or meta.get("has_audio")):
+                meta["loudness"] = loudness(path)
         results.append(meta)
     text = json.dumps(results, ensure_ascii=False, indent=1)
     for _ in range(2):  # keep number lists on one line

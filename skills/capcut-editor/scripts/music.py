@@ -104,6 +104,8 @@ def tone(freq, dur, shape="saw", decay=None, detune=0.0):
 
 def riser(mx, dur):
     n = int(dur * SR)
+    if n < 12:  # too short to smooth; nothing to hear anyway
+        return np.zeros(0)
     nz = mx.noise(n)
     nz = nz - smooth(nz, 6)
     return nz * np.linspace(0, 1, n) ** 2 * 0.25
@@ -236,7 +238,7 @@ def main() -> int:
     ap.add_argument("--mood", choices=MOODS, default="hype")
     ap.add_argument("--bpm", type=float, default=120)
     ap.add_argument("--length", type=float, default=30, help="seconds")
-    ap.add_argument("--drop", type=float, help="seconds; snapped to a bar (default: 2 bars in)")
+    ap.add_argument("--drop", type=float, help="seconds; snapped to a bar, at least the first bar (default: 2 bars in)")
     ap.add_argument("--breath", type=float, help="start of a one-bar breath (kick out, riser), snapped to a bar")
     ap.add_argument("--end-hit", type=float, help="a big hit for the end card, snapped to a bar")
     ap.add_argument("--seed", type=int, default=7)
@@ -249,6 +251,10 @@ def main() -> int:
         return 2
     bar = 240.0 / args.bpm
     drop = snap(args.drop if args.drop is not None else 2 * bar, bar)
+    drop_note = None
+    if drop < bar:  # a drop at 0 leaves no intro and no room for the riser
+        drop_note = f"--drop {args.drop}s snapped up to the first bar ({round(bar, 3)}s); the drop needs an intro bar"
+        drop = round(bar, 3)
     breath = snap(args.breath, bar) if args.breath is not None else None
     end_hit = snap(args.end_hit, bar) if args.end_hit is not None else None
     for name, t in (("drop", drop), ("breath", breath), ("end-hit", end_hit)):
@@ -271,7 +277,7 @@ def main() -> int:
     beats_path.write_text(json.dumps(beats, indent=1), encoding="utf-8")
     print(json.dumps({"wav": str(out), "beats": str(beats_path), "mood": args.mood, "bpm": args.bpm,
                       "drop": drop, "breath": breath, "end_hit": end_hit,
-                      "sections": beats["sections"]}, indent=1))
+                      "sections": beats["sections"], **({"drop_note": drop_note} if drop_note else {})}, indent=1))
     return 0
 
 

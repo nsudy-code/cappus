@@ -216,7 +216,8 @@ cocok. Kalau Anda punya efek favorit di CapCut, sebut namanya; Claude akan menca
 Kalau computer use aktif, Claude membuka draft di CapCut dan melihatnya sendiri. Kalau tidak,
 Claude membuat **preview kasar** dengan ffmpeg (`preview.py`): video kecil 540x960 dan contact sheet,
 lalu memeriksa potongan, framing, dan posisi teks dari situ. Preview ini hanya perkiraan: efek,
-filter, transisi, animasi, mask, dan font asli CapCut tidak digambar. Karena itu selalu putar hasilnya
+filter, transisi, animasi, dan mask tidak digambar. Font sudah memakai file asli CapCut (dari cache
+CapCut); font yang belum pernah diunduh CapCut diganti font tebal biasa. Karena itu selalu putar hasilnya
 di CapCut sebelum ekspor, terutama bagian yang Claude minta untuk dicek.
 
 ## 5. Membuka hasil di CapCut
@@ -405,7 +406,19 @@ python skills/capcut-editor/scripts/probe.py lagu.mp3 --beats
 python skills/capcut-editor/scripts/probe.py klip.mp4 --sheet folder-output --frames 12
 ```
 
-Opsi lain: `--scenes` untuk mencari pergantian adegan dan `--silence` untuk mencari jeda diam.
+Opsi lain: `--scenes` untuk mencari pergantian adegan, `--silence` untuk mencari jeda diam, dan
+`--loudness` untuk mengukur keras suara (LUFS).
+
+**Volume rata otomatis:** tulis `"loudness": true` di spec, maka suara tiap video dan musik diukur
+lalu disetel ke -14 LUFS (standar TikTok/Reels), jadi suara yang pelan naik dan yang terlalu keras
+turun. `cut_talk.py` sudah melakukannya otomatis (matikan dengan `--no-loudness`). Kalau laporan
+bilang `held_by_peak`, rekaman itu punya bunyi keras sesaat (batuk, ketukan) yang akan pecah kalau
+dinaikkan; pilih klipnya di CapCut > Audio > Normalize loudness.
+
+**Hilangkan noise (CapCut Pro):** tambah `--denoise` di `cut_talk.py` (atau `"denoise": true` di klip
+pada spec) untuk menyalakan Reduce noise CapCut: dengung, kipas, dan suara jalan berkurang. Enhance
+voice dan Isolate voice harus dinyalakan sendiri di CapCut (pilih klip > Audio), karena CapCut
+memproses suaranya dulu. Isolate voice gratis.
 
 **Mentranskrip ucapan** (butuh `faster-whisper`):
 
@@ -416,6 +429,73 @@ python skills/capcut-editor/scripts/transcribe.py video.mp4 --language id --srt
 Hasilnya `video.transcript.json` (waktu tiap kata) dan `video.srt` di sebelah file video. Pakai
 transkrip itu di spec dengan `"captions": {"transcript": "video.transcript.json"}`. Opsi lain:
 `--model large-v3-turbo` untuk hasil lebih akurat, `--prompt "Nama, Merek"` untuk petunjuk ejaan.
+
+**Memotong video ngomong ke kamera (talking head) jadi jump cut** (setelah transkrip ada):
+
+```bash
+python skills/capcut-editor/scripts/cut_talk.py video.mp4 --hook-first
+```
+
+Hasilnya `video.cut.json`, spec yang sudah membuang jeda, "eh"/"em", dan kalimat yang diulang (yang
+dipakai take terakhir), dengan punch-in bergantian di potongan, zoom in halus ke kata kunci (angka,
+kata penting) lalu zoom out lagi, gerakan pelan di klip lainnya supaya gambar tidak diam, dan caption. Laporannya berisi apa
+saja yang dipotong dan alasannya, kalimat yang paling cocok jadi hook, dan slot B-roll beserta
+kalimat yang diucapkan di situ. Opsi: `--hook-first` membuka video dengan kalimat hook terbaik sebagai
+teaser, `--broll a.mp4 b.mp4` mengisi slot B-roll, `--max-pause 0.25` memotong lebih rapat,
+`--punch 1` mematikan punch-in, `--zoom smooth` hanya zoom halus tanpa punch-in mendadak, `--zoom cut`
+hanya punch-in, `--zoom-amount 0.2` zoom lebih dekat, `--look clean_tech` memakai look tertentu.
+
+Kalau OpenCV terpasang, `cut_talk.py` juga mencari wajah: video horizontal di-crop ke vertikal
+mengikuti wajah (ikut bergeser kalau orangnya jalan), punch-in tetap di wajah, dan caption pindah
+kalau menutupi wajah. Pasang sekali:
+
+```bash
+python -m pip install -r skills/capcut-editor/requirements-faces.txt
+```
+
+Untuk konten edukasi (dokter, guru, tips) pakai `--look edu`: caption lebih besar dan satu kata
+kunci per kalimat diberi warna. Untuk podcast, interview, atau kajian pakai `--look talk`: caption
+huruf kapital dan kata yang sedang diucapkan menyala. Tambah nama pembicara di bawah layar (lower
+third) dengan `--speaker "dr. Aisya" --role "Dokter Umum"`. Contoh:
+
+```bash
+python skills/capcut-editor/scripts/cut_talk.py video.mp4 --look edu --speaker "dr. Aisya" --role "Dokter Umum" --hook-first
+```
+
+Tanpa OpenCV, kasih tahu posisi wajah dengan `--face-y 0.35` (tinggi wajah dari atas, 0-1). Cek
+posisinya saja: `python skills/capcut-editor/scripts/faces.py video.mp4`.
+
+**Satu video panjang jadi beberapa short:** untuk podcast, kajian, kelas, atau rekaman live,
+transkrip sekali lalu jalankan:
+
+```bash
+python skills/capcut-editor/scripts/transcribe.py kajian.mp4
+python skills/capcut-editor/scripts/shorts.py kajian.mp4 --count 3 --look talk
+```
+
+Skrip memilih potongan 20-60 detik yang paling kuat: dibuka dengan kalimat yang menarik (klaim,
+angka, pertanyaan, menyapa penonton), tidak dimulai dari "jadi..." atau "itu tadi...", dan
+selesai di akhir kalimat. Tiap potongan jadi spec sendiri (`kajian.short1.cut.json`, dst.) dengan
+jump cut, caption, dan framing wajah. Pakai `--list` untuk melihat peringkatnya dulu tanpa menulis
+spec, `--max 45` untuk short yang lebih pendek.
+
+**Preset seri (satu gaya untuk semua episode):** kalau kamu rutin bikin video yang sama (tips
+mingguan dokter, kajian, satu brand), simpan gayanya sekali:
+
+```bash
+python skills/capcut-editor/scripts/presets.py save dr-aisya --look edu --accent "#14B8A6" --speaker "dr. Aisya" --role "Dokter Umum" --handle "@dr.aisya" --logo logo.png
+```
+
+Lalu tiap episode cukup:
+
+```bash
+python skills/capcut-editor/scripts/cut_talk.py episode5.mp4 --preset dr-aisya
+```
+
+Warna, font, caption, nama pembicara, handle, dan logo ikut semua. Flag yang kamu tulis tetap
+menang (misal `--look talk` untuk satu episode podcast). Edit yang kamu suka bisa langsung jadi
+preset: `presets.py save dr-aisya --from-spec episode5.cut.json`. Lihat daftar preset dengan
+`presets.py`, hapus dengan `presets.py delete dr-aisya`. Preset disimpan di `~/.cappus/presets/`.
 
 **Membuat draft dari spec:**
 

@@ -109,6 +109,11 @@ def styles(name: str, brand=None, fonts=None) -> dict:
 
 # words in the request -> looks that suit it, best first (English and Indonesian)
 THEMES = [
+    (("dokter", "doctor", "dr.", "kesehatan", "sehat", "health", "medis", "medical", "edukasi", "education",
+      "tips", "belajar", "guru", "teacher", "tutorial", "penjelasan", "explainer", "fakta", "nutrisi", "gizi",
+      "psikolog", "skincare", "parenting", "finansial", "keuangan"), ("edu", "talk")),
+    (("podcast", "kajian", "ceramah", "dakwah", "interview", "wawancara", "ngobrol", "talkshow", "talk show",
+      "talking head", "opini", "opinion", "cerita", "storytime", "motivasi", "motivation"), ("talk", "edu")),
     (("wedding", "nikah", "pernikahan", "fashion", "beauty", "kecantikan", "hotel", "villa", "property", "properti",
       "rumah", "jewelry", "perhiasan", "salon", "klinik", "clinic", "luxury", "mewah", "parfum"), ("luxury", "cinematic")),
     (("sport", "olahraga", "gym", "fitness", "motor", "mobil", "car ", "gaming", "game", "streetwear", "skate",

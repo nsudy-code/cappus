@@ -159,3 +159,14 @@ def test_a_spec_with_sound_effects_renders_without_stalling(tmp_path, media):
     assert res.returncode == 0, res.stderr
     kinds = {s["codec_type"] for s in probe(out / "preview.mp4")["streams"]}
     assert kinds == {"video", "audio"}
+
+
+def test_a_uniform_scale_keyframe_scales_both_sides():
+    """pycapcut keeps a uniform scale keyframe on the scale_x list alone; CapCut scales both sides."""
+    from types import SimpleNamespace
+    cs = SimpleNamespace(scale_x=1.0, scale_y=1.0, transform_x=0.0, transform_y=0.0, rotation=0.0, alpha=1.0,
+                         flip_horizontal=False, flip_vertical=False)
+    seg = SimpleNamespace(clip_settings=cs, _kf={"scale_x": [(0.0, 1.0, None), (1.0, 1.2, None)]})
+    tr = preview._transform(seg, 1.0)
+    assert tr["sx"] == pytest.approx(1.2) and tr["sy"] == pytest.approx(1.2)
+    assert preview._max_scale(seg) == (pytest.approx(1.2), pytest.approx(1.2))

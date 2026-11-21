@@ -23,8 +23,26 @@ resources your account can export.
 *90 seconds on YouTube: one folder of 22 clips, from installing cappus to a finished, editable
 CapCut reel.*
 
+## What it can do
+
+An AI video editor for CapCut desktop, driven by Claude Code. Ask in plain language, for example
+"cut this into a 30-second TikTok with captions", and get a CapCut project, not a flat export.
+
+- **Auto edit a pile of footage** into one video with a hook, body and payoff, synced to the music beat.
+- **Auto captions** transcribed from the speech (offline, faster-whisper), word by word, with keyword highlight.
+- **Talking-head edits**: jump cuts that remove silences, fillers and retakes, punch-ins, eased zoom-ins
+  on key words, face tracking, and finding the best 20–60 s clips for Shorts in a long recording.
+- **TikTok, Instagram Reels and YouTube Shorts formats**: 9:16 reframing that follows the moving subject.
+- **Designed looks**: title and caption styles, fonts, motion presets, filters, effects and transitions
+  from CapCut's own library (about 5,000 resources, free and Pro).
+- **Eased keyframes** written as real CapCut ease curves, editable in CapCut's keyframe graph.
+- **Audio**: generated royalty-free music and sound effects (whoosh, pop, hit, riser), loudness to −14 LUFS,
+  noise reduction.
+- **Preview** an approximate render with ffmpeg before you open CapCut.
+
 ## Contents
 
+- [What it can do](#what-it-can-do)
 - [How it works](#how-it-works)
 - [Requirements](#requirements)
 - [Installation](#installation)
@@ -206,8 +224,8 @@ timing so the first draft already looks designed:
   well-lit shots first, duplicates and bad takes out), picks the best seconds of each, tells the story
   in the right order, matches the colors, and reframes horizontal footage around the action (the
   vertical crop follows a subject that walks, flies or drives across the frame).
-- **Looks**: seven tested styles (`kinetic`, `bold_promo`, `clean_tech`, `cinematic`, `playful`,
-  `luxury`, `street`), each a font pairing, colors, text animation and music mood. Your brand color
+- **Looks**: nine tested styles (`kinetic`, `bold_promo`, `clean_tech`, `cinematic`, `playful`,
+  `luxury`, `street`, and `edu` and `talk` for people talking to camera), each a font pairing, colors, text animation and music mood. Your brand color
   is used automatically.
 - **Fonts**: 50 free CapCut fonts picked by looking at all of them, sized to fill the frame.
 - **Music**: no track? cappus generates one that is free to use, on an exact beat grid, so every cut
@@ -224,7 +242,12 @@ timing so the first draft already looks designed:
 
 For footage with speech, Claude transcribes it offline and writes the captions into the draft as
 ordinary CapCut text, styled and editable. Each word keeps its time in the source file, so the
-captions stay in sync after Claude removes pauses, drops repeated takes or reorders sentences. Tell
+captions stay in sync after Claude removes pauses, drops repeated takes or reorders sentences. Captions can light up the word being said and show a keyword per sentence in color and bigger. For
+someone talking to camera, Claude cuts the pauses, "um"s and flubbed takes from the transcript and
+the silences (`cut_talk.py`), alternates the framing at the cuts, suggests the strongest line to open
+on, and marks where B-roll fits. With the optional OpenCV package it also finds the face, so a
+horizontal recording is cropped to vertical around the speaker, punch-ins stay on the face and
+captions don't cover it. Tell
 Claude how to spell names, brands and unusual terms. If a word is wrong, fix it in CapCut or ask
 Claude to transcribe again with the more accurate `large-v3-turbo` model (about 1.6 GB, slower).
 If you already have an SRT file, give it to Claude instead.
@@ -279,6 +302,7 @@ JSON and has `--help`.
 |---|---|
 | `probe.py` | Media info, contact sheets, shot changes, speech segments, music beats |
 | `transcribe.py` | Speech to text with a time for every word, plus an optional SRT (needs faster-whisper) |
+| `cut_talk.py` | Turn a talking-head take into a jump-cut spec: pauses, fillers and retakes out, punch-ins, hook ranking, B-roll slots |
 | `catalog.py` | Search the CapCut resources: transitions, effects, filters, animations, fonts |
 | `build_draft.py` | Validate a spec (`--check`) and write it as a CapCut draft |
 | `inspect_draft.py` | Read an existing draft, including your manual edits in CapCut |
@@ -288,6 +312,9 @@ JSON and has `--help`.
 | `looks.py` | List the looks (font pairing, colors, motion, music) or show one |
 | `music.py` | Generate a free music bed with an exact beat map |
 | `sfx.py` | Generate the free sound-effect kit (whoosh, pop, tick, hit, riser) with each peak time |
+| `faces.py` | Find the speaker's face (optional OpenCV): crop to vertical around it, punch-ins, text spots off it |
+| `presets.py` | Save a series' look, colors, captions, speaker, handle and logo once; use it for every episode |
+| `shorts.py` | Find the best 20-60 s clips in a long recording and cut each into its own spec |
 | `scan_footage.py` | Sort a folder of footage: shots, quality scores, duplicates, best windows, color matching, reframing |
 | `site_capture.py` | Screenshot a website on a phone and extract its text, prices, contacts and colors (needs Playwright) |
 | `check_resources.py` | Find catalog items CapCut can no longer load |
@@ -312,8 +339,8 @@ python skills/capcut-editor/scripts/preview.py examples/demo.json --out demo-pre
 
 The last command writes `demo-preview/preview.mp4` (540x960, 15 fps) and `demo-preview/sheet.jpg`.
 It is an approximation stamped "PREVIEW - approximate": clips, framing, motion, text positions and
-audio follow the spec, but effects, filters, transitions, animations, masks and the real fonts are
-not drawn.
+audio follow the spec, and texts use CapCut's own font files when CapCut has downloaded them. Effects,
+filters, transitions, animations and masks are not drawn.
 
 Then open the `cappus-demo` draft in CapCut. `examples/demo-pro.json` shows Pro resources and needs
 `--allow-pro` or a Pro setting. `examples/demo-sfx.json` adds generated sound effects: whooshes on the
@@ -341,6 +368,10 @@ skills/capcut-editor/
   scripts/
     probe.py                Media analysis
     transcribe.py           Speech to text with word timings (optional)
+    cut_talk.py             Talking head to jump cuts, hooks and B-roll slots
+    faces.py                Face finder for framing talking heads (optional OpenCV)
+    presets.py              Series presets (~/.cappus/presets)
+    shorts.py               Long recording to several shorts
     catalog.py              Resource search
     build_draft.py          Spec to CapCut draft
     inspect_draft.py        Read existing drafts
@@ -359,6 +390,7 @@ skills/capcut-editor/
     unavailable.json        Resources CapCut has withdrawn; the builder rejects them
   requirements.txt
   requirements-captions.txt Optional speech-to-text dependency
+  requirements-faces.txt    Optional face detection (OpenCV 4) for talking heads
 docs/cara-pakai.md          User guide in Indonesian
 docs/demo.gif               The animation at the top of this README
 docs/video-tutorial.jpg     Thumbnail for the video tutorial link

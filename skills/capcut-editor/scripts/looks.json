@@ -1,5 +1,5 @@
 {
- "_about": "Looks: tested combinations of fonts, colors, text styles and motion, so an edit looks designed from the first build. A spec uses one with \"look\": \"<name>\" (and \"brand\" for its colors). The builder adds the look's styles (title, accent, big, label, caption); styles in the spec with the same name override them key by key. Colors: $text, $accent and $muted are replaced by spec.brand, else by the look's own colors. Everything else here (cards, transitions, hit, filter, pace, music) is guidance for whoever writes the spec. All items are free CapCut resources. pairings: other tested font pairings for the look; looks.py suggest picks one to fit the footage and theme and to differ from the last edits, and the spec's \"fonts\" applies it (sizes are adjusted to each font's width).",
+ "_about": "Looks: tested combinations of fonts, colors, text styles and motion, so an edit looks designed from the first build. A spec uses one with \"look\": \"<name>\" (and \"brand\" for its colors). The builder adds the look's styles (title, accent, big, label, caption); styles in the spec with the same name override them key by key. Colors: $text, $accent and $muted are replaced by spec.brand, else by the look's own colors. Everything else here (cards, transitions, hit, filter, pace, music, captions) is guidance for whoever writes the spec. All items are free CapCut resources. pairings: other tested font pairings for the look; looks.py suggest picks one to fit the footage and theme and to differ from the last edits, and the spec's \"fonts\" applies it (sizes are adjusted to each font's width). captions: the caption settings for a talk (max_words, uppercase, highlight, keywords); cut_talk.py copies them into the spec. name and role: a lower third (who is speaking).",
  "looks": {
   "bold_promo": {
    "description": "Loud and punchy: condensed heavy headlines that hit on every beat. Ads, sales, product launches, gyms, events.",
@@ -949,6 +949,331 @@
      "body": "playfair_italic",
      "mood": "wide geometric caps, calmer",
      "energy": "low",
+     "light": "any"
+    }
+   ]
+  },
+  "edu": {
+   "description": "Trusted and clear: an expert explaining (doctor, teacher, coach, tips). Big readable captions with the key word in color, a red-on-white hook, a name and role lower third.",
+   "fonts": {
+    "headline": "montserrat",
+    "body": "poppins_bold"
+   },
+   "colors": {
+    "text": "#FFFFFF",
+    "accent": "#22D3EE",
+    "muted": "#CBD5E1",
+    "background": "#0F172A"
+   },
+   "styles": {
+    "title": {
+     "font": "montserrat",
+     "size": 10,
+     "bold": true,
+     "color": "#E11D48",
+     "background": {
+      "color": "#FFFFFF",
+      "opacity": 1,
+      "radius": 0.25
+     },
+     "enter": "pop"
+    },
+    "accent": {
+     "font": "montserrat",
+     "size": 13,
+     "bold": true,
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
+     "stroke": {
+      "color": "#000000",
+      "width": 40
+     },
+     "enter": "punch"
+    },
+    "big": {
+     "font": "montserrat",
+     "size_max": 20,
+     "fit_width": 0.82,
+     "wrap": false,
+     "bold": true,
+     "color": [
+      "$text",
+      "auto"
+     ],
+     "stroke": {
+      "color": "#000000",
+      "width": 40
+     },
+     "enter": "pop"
+    },
+    "label": {
+     "font": "poppins_bold",
+     "size": 7,
+     "color": [
+      "$muted",
+      "auto"
+     ],
+     "intro": {
+      "name": "reveal_up",
+      "duration": 0.3
+     }
+    },
+    "caption": {
+     "font": "poppins_bold",
+     "size": 11,
+     "bold": true,
+     "color": "$text",
+     "stroke": {
+      "color": "#000000",
+      "width": 45
+     }
+    },
+    "name": {
+     "font": "poppins_bold",
+     "size": 8,
+     "bold": true,
+     "color": "$background",
+     "background": {
+      "color": "$accent",
+      "opacity": 1,
+      "radius": 0.2
+     },
+     "intro": {
+      "name": "reveal_up",
+      "duration": 0.35
+     }
+    },
+    "role": {
+     "font": "poppins_bold",
+     "size": 6,
+     "color": "$text",
+     "background": {
+      "color": "#000000",
+      "opacity": 0.6,
+      "radius": 0.2
+     },
+     "intro": {
+      "name": "reveal_up",
+      "duration": 0.35
+     }
+    }
+   },
+   "captions": {
+    "max_words": 4,
+    "keywords": {
+     "color": "$accent",
+     "scale": 1.25
+    }
+   },
+   "cards": {
+    "enter": "rise",
+    "drift": 0.035
+   },
+   "transitions": [
+    "slide_left",
+    "push_left"
+   ],
+   "hit": {
+    "effect": "shake",
+    "duration": 0.25
+   },
+   "filter": null,
+   "music": {
+    "mood": "corporate",
+    "bpm": 100
+   },
+   "pace": "a cut at every pause, B-roll on what is named, the hook title only in the first 2 s",
+   "pairings": [
+    {
+     "headline": "montserrat",
+     "body": "poppins_bold",
+     "mood": "clear and trusted",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "rubik_bold",
+     "body": "nunito",
+     "mood": "friendly teacher",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "anton",
+     "body": "poppins_bold",
+     "mood": "punchy tips",
+     "energy": "high",
+     "light": "any"
+    },
+    {
+     "headline": "gloock",
+     "body": "poppins_bold",
+     "mood": "calm authority",
+     "energy": "low",
+     "light": "any"
+    }
+   ]
+  },
+  "talk": {
+   "description": "Podcast and talking-head shorts: big capital captions, two or three words at a time, the word being said lights up. Podcasts, interviews, kajian, opinions, stories.",
+   "fonts": {
+    "headline": "anton",
+    "body": "poppins_bold"
+   },
+   "colors": {
+    "text": "#FFFFFF",
+    "accent": "#FACC15",
+    "muted": "#D4D4D8",
+    "background": "#0A0A0A"
+   },
+   "styles": {
+    "title": {
+     "font": "anton",
+     "size": 14,
+     "color": [
+      "$text",
+      "auto"
+     ],
+     "stroke": {
+      "color": "#000000",
+      "width": 45
+     },
+     "enter": "punch"
+    },
+    "accent": {
+     "font": "anton",
+     "size": 18,
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
+     "stroke": {
+      "color": "#000000",
+      "width": 45
+     },
+     "enter": "punch"
+    },
+    "big": {
+     "font": "anton",
+     "size_max": 28,
+     "fit_width": 0.82,
+     "wrap": false,
+     "color": [
+      "$accent",
+      "$text",
+      "auto"
+     ],
+     "stroke": {
+      "color": "#000000",
+      "width": 45
+     },
+     "enter": "pop"
+    },
+    "label": {
+     "font": "poppins_bold",
+     "size": 7,
+     "color": [
+      "$muted",
+      "auto"
+     ],
+     "intro": {
+      "name": "reveal_up",
+      "duration": 0.3
+     }
+    },
+    "caption": {
+     "font": "poppins_bold",
+     "size": 12,
+     "bold": true,
+     "color": "$text",
+     "stroke": {
+      "color": "#000000",
+      "width": 55
+     }
+    },
+    "name": {
+     "font": "poppins_bold",
+     "size": 8,
+     "bold": true,
+     "color": "#0A0A0A",
+     "background": {
+      "color": "$accent",
+      "opacity": 1,
+      "radius": 0.15
+     },
+     "intro": {
+      "name": "reveal_up",
+      "duration": 0.35
+     }
+    },
+    "role": {
+     "font": "poppins_bold",
+     "size": 6,
+     "color": "$text",
+     "background": {
+      "color": "#000000",
+      "opacity": 0.6,
+      "radius": 0.15
+     },
+     "intro": {
+      "name": "reveal_up",
+      "duration": 0.35
+     }
+    }
+   },
+   "captions": {
+    "max_words": 3,
+    "uppercase": true,
+    "punctuation": false,
+    "highlight": {
+     "color": "$accent"
+    },
+    "keywords": {
+     "color": "$accent",
+     "scale": 1.15
+    }
+   },
+   "cards": {
+    "enter": "pop",
+    "drift": 0.03
+   },
+   "transitions": [
+    "white_flash"
+   ],
+   "hit": {
+    "effect": "shake",
+    "duration": 0.25
+   },
+   "filter": null,
+   "music": {
+    "mood": "chill",
+    "bpm": 90
+   },
+   "pace": "a cut at every pause, framing changes every cut or two, little else on screen",
+   "pairings": [
+    {
+     "headline": "anton",
+     "body": "poppins_bold",
+     "mood": "classic podcast clip",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "bebas",
+     "body": "montserrat",
+     "mood": "clean caps",
+     "energy": "any",
+     "light": "any"
+    },
+    {
+     "headline": "resolve",
+     "body": "poppins_bold",
+     "mood": "wide and loud",
+     "energy": "high",
      "light": "any"
     }
    ]

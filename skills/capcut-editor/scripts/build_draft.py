@@ -34,6 +34,7 @@ import contrast
 import easing
 import looks as looks_mod
 import motion
+import presets as presets_mod
 import sfx as sfx_mod
 from _common import font_width
 from pycapcut import assets as cc_assets
@@ -46,12 +47,12 @@ DRAFT_DIR_TOKEN = "##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80
 VISUAL_KEYS = {
     "id", "src", "in", "out", "duration", "speed", "volume", "mute", "fit", "background", "transform",
     "keyframes", "motion", "intro", "outro", "combo", "filter", "effects", "mask", "blend", "chroma",
-    "remove_bg", "fade", "enter", "exit", "drift", "adjust", "note",
+    "remove_bg", "fade", "enter", "exit", "drift", "adjust", "loudness", "denoise", "note",
 }
 MAIN_KEYS = VISUAL_KEYS | {"transition"}
 OVERLAY_KEYS = VISUAL_KEYS | {"at", "end", "track"}
 AUDIO_KEYS = {"id", "src", "at", "end", "in", "out", "duration", "speed", "volume", "fade", "effects",
-              "keyframes", "duck", "track", "note"}
+              "keyframes", "duck", "loudness", "denoise", "track", "note"}
 STYLE_KEYS = {
     "font", "size", "color", "opacity", "bold", "italic", "underline", "align", "vertical",
     "letter_spacing", "line_spacing", "wrap", "x", "y", "scale", "rotation", "stroke", "shadow",
@@ -61,7 +62,10 @@ STYLE_KEYS = {
 TEXT_KEYS = STYLE_KEYS | {"text", "at", "end", "duration", "track", "style", "keyframes", "echo", "note"}
 ECHO_KEYS = {"count", "spacing", "stagger", "style", "color", "stroke"}
 CAPTION_KEYS = {"transcript", "srt", "cues", "words", "source", "max_words", "max_chars", "max_gap",
-                "uppercase", "punctuation", "offset", "style", "track", "min_duration", "note"}
+                "uppercase", "punctuation", "offset", "style", "track", "min_duration", "highlight", "keywords",
+                "note"}
+HIGHLIGHT_KEYS = {"color", "upcoming", "scale"}
+KEYWORD_KEYS = {"words", "color", "scale"}
 NO_SPACE_LANGS = {"zh", "ja", "yue", "th", "lo", "my", "km", "bo"}  # written without spaces between words
 CUE_BREAK = ".?!,;:。，、！？"
 # Short words that should open a caption rather than end one (English and Indonesian).
@@ -72,8 +76,9 @@ _PUNCT = re.compile(r"(?<!\d)[.,!?;:…。，、！？]+|[.,!?;:…]+(?!\d)")
 FX_KEYS = {"name", "at", "end", "duration", "params", "track", "note"}
 FILTER_KEYS = {"name", "at", "end", "duration", "intensity", "track", "note"}
 STICKER_KEYS = {"resource_id", "at", "end", "duration", "transform", "track", "keyframes", "note"}
-TOP_KEYS = {"name", "width", "height", "fps", "allow_pro", "look", "brand", "fonts", "styles", "video", "overlays", "audio",
-            "texts", "captions", "effects", "filters", "stickers", "linear_keyframes", "note"}
+TOP_KEYS = {"name", "width", "height", "fps", "allow_pro", "preset", "look", "brand", "fonts", "styles", "video", "overlays", "audio",
+            "texts", "captions", "effects", "filters", "stickers", "linear_keyframes", "loudness",
+            "note"}
 LIST_KEYS = ("video", "overlays", "audio", "texts", "effects", "filters", "stickers")
 
 KF_PROPS = {
@@ -98,6 +103,29 @@ SFX_KEYS = {"sound", "src", "peak", "at", "take", "volume", "gain", "track", "id
 SFX_CUE_KEYS = SFX_KEYS - {"at", "id"}
 SFX_OVER_MUSIC_DB = 3.0      # default level: this much over the music playing under it
 SFX_MAX_VOLUME = 4.0         # about +12 dB
+LOUDNESS_TARGET = -14.0      # LUFS: what TikTok, Reels and Shorts play at
+LOUDNESS_PEAK = -1.0         # dBTP: the most a peak may reach after the gain (CapCut has no limiter)
+LOUDNESS_RANGE = (-20.0, 12.0)  # dB: the most a file is turned down or up
+DENOISE_MODEL = "unet_denoise_44k_music_model_v1.0.model"  # CapCut's Reduce noise, in <install>/Resources/audiosami
+DENOISE_RATE = 0.85          # what CapCut sets when Reduce noise is switched on
+
+
+def denoise_model():
+    """CapCut's own Reduce noise model file (newest installed version), or None."""
+    import _env
+    inst = _env.capcut_install()
+    if not inst:
+        return None
+    root = Path(inst["path"])
+    if sys.platform == "darwin":
+        found = list((root / "Contents" / "Resources").rglob(DENOISE_MODEL))
+    else:
+        found = list(root.glob(f"*/Resources/audiosami/{DENOISE_MODEL}"))
+        if inst.get("version"):
+            found.sort(key=lambda p: p.parts[-4] != inst["version"])  # the running version first
+        else:
+            found.sort(key=lambda p: [int(x) for x in re.findall(r"\d+", p.parts[-4])], reverse=True)
+    return found[0].as_posix() if found else None
 NOT_MUSIC = ("sfx", "vo", "voice")  # audio tracks named like this do not set the sfx level
 MAIN_KEYS = MAIN_KEYS | {"sfx"}
 OVERLAY_KEYS = OVERLAY_KEYS | {"sfx"}
@@ -121,6 +149,39 @@ def secs(value, ctx, lo=None, above=None) -> int:
 
 def sec(micros: int) -> float:
     return round(micros / 1_000_000, 3)
+
+
+def _norm_word(w: str) -> str:
+    return re.sub(r"[^\w%]+", "", str(w).lower())
+
+
+class RichText(cc.TextSegment):
+    """A text whose words can have their own color and size: CapCut keeps one style per character
+    range in the text's content, so a caption can light up the word being said or a keyword."""
+    runs = ()  # [(first_char, end_char, {"color": (r, g, b), "size": float})]
+
+    def export_material(self):
+        m = super().export_material()
+        if not self.runs:
+            return m
+        content = json.loads(m["content"])
+        base, text = content["styles"][0], content["text"]
+        u16 = lambda i: len(text[:i].encode("utf-16-le")) // 2  # CapCut counts UTF-16 units
+        cuts = sorted({0, len(text), *(i for a, b, _ in self.runs for i in (a, b))})
+        styles = []
+        for a, b in zip(cuts, cuts[1:]):
+            st = json.loads(json.dumps(base))
+            st["range"] = [u16(a), u16(b)]
+            for ra, rb, o in self.runs:
+                if ra <= a and b <= rb:
+                    if "color" in o:
+                        st["fill"]["content"]["solid"]["color"] = list(o["color"])
+                    if "size" in o:
+                        st["size"] = o["size"]
+            styles.append(st)
+        content["styles"] = styles
+        m["content"] = json.dumps(content, ensure_ascii=False)
+        return m
 
 
 def hex_rgb(value, ctx="color"):
@@ -201,6 +262,20 @@ def points(value, ctx, minimum=2, ease=False) -> list:
     return value
 
 
+def media_time(seg, off) -> int:
+    """A keyframe's time_offset as CapCut reads it: microseconds into the media file, not into the clip.
+
+    CapCut (checked in 9.8.0, a scale keyframe added by hand on a clip trimmed to start 28.865 s into
+    its video saved time_offset 30466666) measures keyframes on a video or audio clip from the start of
+    the file, so a clip offset becomes source start + offset x speed. Texts and stickers have no source
+    and keep clip time; a photo or an untrimmed clip starts at 0, where both agree."""
+    src = getattr(seg, "source_timerange", None)
+    if src is None:
+        return int(round(off))
+    speed = float(getattr(getattr(seg, "speed", None), "speed", 1.0) or 1.0)
+    return int(round(src.start + off * speed))
+
+
 def x_path(tr, ctx) -> list:
     """transform.x_path: [[source_seconds, x], ...], times rising (scan_footage.py's reframe_path)."""
     pts = points(tr["x_path"], f"{ctx}.x_path")
@@ -245,6 +320,10 @@ class Builder:
     def __init__(self, spec: dict, base_dir: Path, allow_pro=None):
         if not isinstance(spec, dict):
             raise SpecError(f"the spec must be a JSON object ({{\"video\": [...], ...}}), got {type(spec).__name__}")
+        try:
+            spec = presets_mod.apply(spec)  # a series preset: its look, captions, handle and logo
+        except presets_mod.PresetError as e:
+            raise SpecError(str(e))
         check_keys(spec, TOP_KEYS, "spec")
         for key in LIST_KEYS:
             if spec.get(key) is not None and not isinstance(spec[key], list):
@@ -298,6 +377,8 @@ class Builder:
         self.notes: list = []        # things the builder decided for you, for the report
         self.sfx_cues: list = []     # (ctx, sfx item, function -> picture time in us)
         self.music: list = []        # (start, end, volume) of audio that sets the sfx level
+        self.loud_target, self.loud_peak = self.parse_loudness(spec.get("loudness"))
+        self._levels: dict = {}      # file -> (gain, report row)
 
     # ---------- looks, motion presets, text fit ----------
     @staticmethod
@@ -527,6 +608,76 @@ class Builder:
             raise SpecError(f"{ctx}: {what} not found: {p}")
         return str(p.resolve())
 
+    @staticmethod
+    def parse_loudness(value):
+        """(target LUFS, peak ceiling dBTP or None), or (None, None) when the spec does not level."""
+        if value is None or value is False:
+            return None, None
+        if value is True:
+            return LOUDNESS_TARGET, LOUDNESS_PEAK
+        if isinstance(value, (int, float)):
+            return num(value, "spec.loudness", lo=-40, hi=-5), LOUDNESS_PEAK
+        if isinstance(value, dict):
+            check_keys(value, {"target", "peak"}, "spec.loudness")
+            target = num(value.get("target", LOUDNESS_TARGET), "spec.loudness.target", lo=-40, hi=-5)
+            peak = value.get("peak", LOUDNESS_PEAK)
+            return target, (None if peak is None else num(peak, "spec.loudness.peak", lo=-10, hi=3))
+        raise SpecError('spec.loudness is true, a target in LUFS like -14, or {"target": -14, "peak": -1}')
+
+    def level(self, item, src, ctx) -> float:
+        """The gain that brings a file's sound to the spec's loudness (1.0 when not levelling)."""
+        if self.loud_target is None or item.get("loudness", True) is False:
+            return 1.0
+        if not isinstance(item.get("loudness", True), bool):
+            raise SpecError(f"{ctx}.loudness is false (keep this item's own level) or left out")
+        path = self.path(src, ctx)
+        if path not in self._levels:
+            import probe
+            if not shutil.which("ffmpeg"):
+                self.warnings.append("loudness: ffmpeg is not on PATH, so nothing was levelled")
+                self.loud_target = None
+                return 1.0
+            m = probe.loudness(Path(path))
+            if m is None:
+                self._levels[path] = (1.0, None)
+            else:
+                gain = self.loud_target - m["lufs"]
+                limited = gain > 0 and self.loud_peak is not None and m["peak_db"] + gain > self.loud_peak
+                if limited:  # raise it only as far as its loudest peak allows, never lower it for that
+                    gain = max(0.0, self.loud_peak - m["peak_db"])
+                gain = max(LOUDNESS_RANGE[0], min(LOUDNESS_RANGE[1], gain))
+                row = {"file": Path(path).name, "lufs": m["lufs"], "peak_db": m["peak_db"],
+                       "gain_db": round(gain, 1), "now_lufs": round(m["lufs"] + gain, 1)}
+                if limited:
+                    row["held_by_peak"] = True
+                self._levels[path] = (10 ** (gain / 20), row)
+        return self._levels[path][0]
+
+    def denoise(self, seg, item, ctx):
+        """CapCut's Reduce noise on this clip (a real-time filter: nothing to process first)."""
+        value = item.get("denoise", False)
+        if value is False:
+            return
+        rate = DENOISE_RATE if value is True else num(value, f"{ctx}.denoise", lo=0.05, hi=1)
+        if not self.allow_pro:
+            raise SpecError(
+                f"{ctx}: denoise uses CapCut's Reduce noise, a CapCut Pro feature, and Pro is not enabled. "
+                "If the user has CapCut Pro, run `tier.py pro` or set \"allow_pro\": true in the spec. "
+                "Otherwise leave it out; on a free account, Audio > Isolate voice cleans speech for free.")
+        if not hasattr(self, "_denoise_model"):
+            self._denoise_model = denoise_model()
+        if not self._denoise_model:
+            raise SpecError(f"{ctx}: denoise needs CapCut desktop installed here (its Reduce noise model, "
+                            f"{DENOISE_MODEL}, was not found). Leave it out and switch on Audio > Reduce noise "
+                            "in CapCut instead.")
+        mid = uuid.uuid4().hex
+        self.script.imported_materials.setdefault("realtime_denoises", []).append({
+            "id": mid, "type": "realtime_denoise", "is_denoise": True, "denoise_mode": 1.0,
+            "denoise_rate": round(rate, 2), "path": self._denoise_model, "sami_name": "denoise_v2",
+            "sami_version": "1.0", "sami_type": 2, "is_from_hd_sounds": False})
+        seg.extra_material_refs.append(mid)
+        self.pro_used.append("feature: denoise (Reduce noise)")
+
     def heard(self, src, tin, sdur, speed, start, volume):
         """Remember where a media file is audible on the timeline (captions map speech through it)."""
         if volume > 0:
@@ -718,6 +869,8 @@ class Builder:
         tin, sdur, speed = self.source_range(c, mat.duration, photo, ctx)
         base = self.fit_scale(mat, c.get("fit"))
         volume = 0.0 if c.get("mute") else num(c.get("volume", 1.0), f"{ctx}.volume", lo=0)
+        if volume > 0 and not photo:
+            volume = round(volume * self.level(c, c.get("src"), ctx), 3)
         seg = cc.VideoSegment(
             mat, cc.Timerange(start, int(round(sdur / speed))),
             source_timerange=cc.Timerange(tin, sdur), speed=speed, volume=volume,
@@ -725,6 +878,8 @@ class Builder:
         )
         seg._base = base
         seg._mat = mat
+        if not photo and volume > 0:
+            self.denoise(seg, c, ctx)
         if not photo:
             self.heard(self.path(c.get("src"), ctx), tin, sdur, speed, start, volume)
         return seg
@@ -774,6 +929,7 @@ class Builder:
             placed.sort(key=lambda p: p[0])
             if self.linear_keyframes:
                 placed = [[round(t), v] for t, v in easing.sample(placed)]
+            placed = [[media_time(seg, p[0]), *p[1:]] for p in placed]
             for off, val, *_ in placed:
                 seg.add_keyframe(KF_PROPS[prop], off, val)
             eases = {p[0]: easing.parse(p[2], pc) for p in placed if len(p) > 2 and p[2] not in (None, "linear")}
@@ -1026,10 +1182,13 @@ class Builder:
                     tout = mat.duration
                 if tin < 0 or tout <= tin:
                     raise SpecError(f"{ctx}: invalid source range in={sec(tin)}s out={sec(tout)}s")
-                vol = num(a.get("volume", 1.0), f"{ctx}.volume", lo=0)
+                own_vol = num(a.get("volume", 1.0), f"{ctx}.volume", lo=0)
+                gain = self.level(a, a.get("src"), ctx) if own_vol > 0 else 1.0
+                vol = round(own_vol * gain, 3)
                 seg = cc.AudioSegment(mat, cc.Timerange(start, int(round((tout - tin) / speed))),
                                       source_timerange=cc.Timerange(tin, tout - tin), speed=speed, volume=vol)
                 self.heard(self.path(a.get("src"), ctx), tin, tout - tin, speed, start, vol)
+                self.denoise(seg, a, ctx)
                 dur = seg.duration
                 if a.get("fade"):
                     check_keys(a["fade"], {"in", "out"}, f"{ctx}.fade")
@@ -1056,7 +1215,7 @@ class Builder:
                     for pt in points(kf["volume"], f"{ctx}.keyframes.volume", minimum=1):
                         off = us(num(pt[0], f"{ctx}.keyframes.volume time"))
                         marks.append((off + dur if off < 0 else off,
-                                       num(pt[1], f"{ctx}.keyframes.volume value", lo=0)))
+                                       num(pt[1], f"{ctx}.keyframes.volume value", lo=0) * gain))
                 if a.get("duck"):
                     dk = a["duck"]
                     check_keys(dk, {"ranges", "to", "ramp"}, f"{ctx}.duck")
@@ -1079,13 +1238,13 @@ class Builder:
                     off = max(0, min(dur, off))
                     if off <= last:
                         continue
-                    seg.add_keyframe(off, val)
+                    seg.add_keyframe(media_time(seg, off), val)
                     last = off
                 track = self.place(cc.TrackType.audio, a.get("track", "audio"), seg.target_timerange)
                 self.script.add_segment(seg, track)
                 self.register(a, "audio", start, dur, track, Path(mat.path).name)
                 if not track.lower().startswith(NOT_MUSIC):
-                    self.music.append((start, start + dur, vol))
+                    self.music.append((start, start + dur, own_vol))  # sfx follow the level the spec set
             except ITEM_ERRORS as e:
                 self.fail(ctx, e)
 
@@ -1151,7 +1310,7 @@ class Builder:
         sc = num(st.get("scale", 1.0), f"{ctx}.scale", above=0)
         font = self.res("font", st["font"]) if st.get("font") else None
         self.check_fit(text, st, font, ctx)
-        seg = cc.TextSegment(
+        seg = RichText(
             text, cc.Timerange(start, dur),
             font=font, style=style,
             clip_settings=cc.ClipSettings(transform_x=num(st.get("x", 0), f"{ctx}.x"),
@@ -1375,30 +1534,117 @@ class Builder:
                 nxt = groups[n + 1] if n + 1 < len(groups) else None
                 if nxt and nxt["k"] == g["k"] and nxt["w"][0][1] - e0 < max_gap:
                     e0 = nxt["w"][0][1]  # hold the words through short pauses instead of flickering
-                cues.append([s0, e0, joiner.join(x[0] for x in g["w"])])
+                cues.append([s0, e0, joiner.join(x[0] for x in g["w"]), g["w"]])
         elif plays is not None:
             cues = [[s0, e0, text] for c0, c1, text in cues for s0, e0, _ in self.map_span(plays, c0, c1, False)]
         cues.sort(key=lambda c: c[0])
         offset = num(cap.get("offset", 0), f"{ctx}.offset")
         min_d = num(cap.get("min_duration", 0.35), f"{ctx}.min_duration", lo=0)
+        def clean(text):
+            if cap.get("punctuation") is False:
+                text = re.sub(r"[ \t]{2,}", " ", _PUNCT.sub("", text)).strip()
+            return text.upper() if cap.get("uppercase") else text
+
         out = []
-        for n, (s0, e0, text) in enumerate(cues):
+        for n, cue in enumerate(cues):
+            s0, e0, text = cue[:3]
             e0 = max(e0, s0 + min_d)
             if n + 1 < len(cues):
                 e0 = min(e0, cues[n + 1][0])
-            if cap.get("punctuation") is False:
-                text = re.sub(r"[ \t]{2,}", " ", _PUNCT.sub("", text)).strip()
+            spans = None
+            if len(cue) > 3:  # words with times: where each one sits in the text, for highlights
+                parts = [(clean(w), ws) for w, ws, _ in cue[3]]
+                parts = [x for x in parts if x[0]]
+                spans, pos = [], 0
+                for w, ws in parts:
+                    spans.append((pos, pos + len(w), us(ws + offset), w))
+                    pos += len(w) + len(joiner)
+                text = joiner.join(x[0] for x in parts)
+            else:
+                text = clean(text)
             if e0 - s0 < 0.05 or s0 + offset < 0 or not text:
                 continue
-            if cap.get("uppercase"):
-                text = text.upper()
-            out.append((us(s0 + offset), us(e0 - s0), text))
+            out.append((us(s0 + offset), us(e0 - s0), text, spans))
         desc = f"{len(out)} cues"
         if plays is not None:
             desc += f", synced to {len(plays)} clip(s) of {Path(source).name}"
             if dropped:
                 desc += f"; {dropped} of {total} words fall in parts that were cut"
         return out, desc
+
+    def caption_accents(self, cap, st, ctx):
+        """The highlight (the word being said) and keyword settings, with colors resolved."""
+        palette = {}
+        if self.spec.get("look"):
+            palette = looks_mod.colors(self.spec["look"], self.spec.get("brand"))
+        default = palette.get("accent", "#FFD400")
+
+        def color(v, key):
+            if isinstance(v, str) and v.startswith("$"):
+                if v[1:] not in palette:
+                    raise SpecError(f"{ctx}.{key}: {v} needs a look with that color")
+                v = palette[v[1:]]
+            return hex_rgb(v, f"{ctx}.{key}")
+        hl = kw = None
+        h = cap.get("highlight")
+        if h:
+            h = {} if h is True else h
+            if not isinstance(h, dict):
+                raise SpecError(f'{ctx}.highlight must be true or {{"color": "#RRGGBB"}}')
+            check_keys(h, HIGHLIGHT_KEYS, f"{ctx}.highlight")
+            hl = {"color": color(h.get("color", default), "highlight.color"),
+                  "scale": num(h.get("scale", 1.0), f"{ctx}.highlight.scale", lo=0.5, hi=2)}
+            if h.get("upcoming"):
+                hl["upcoming"] = color(h["upcoming"], "highlight.upcoming")
+        k = cap.get("keywords")
+        if k:
+            k = {"words": k} if isinstance(k, list) else k
+            if not isinstance(k, dict):
+                raise SpecError(f'{ctx}.keywords must be a list of words or {{"words": [...], "color": ...}}')
+            check_keys(k, KEYWORD_KEYS, f"{ctx}.keywords")
+            words = k.get("words") or []
+            if not isinstance(words, list) or not all(isinstance(w, str) and w.strip() for w in words):
+                raise SpecError(f"{ctx}.keywords.words must be a list of words")
+            kw = {"words": {_norm_word(w) for w in words},
+                  "color": color(k.get("color", default), "keywords.color"),
+                  "scale": num(k.get("scale", 1.2), f"{ctx}.keywords.scale", lo=0.5, hi=2)}
+        return hl, kw
+
+    @staticmethod
+    def caption_pieces(start, dur, spans, st, hl, kw):
+        """[(start, dur, runs)]: with a highlight, one piece per word said (the same text, the word
+        being said in color); else the whole cue. Keywords keep their color and size throughout."""
+        size = float(st.get("size", 9))
+        keys = {(a, b) for a, b, _, w in (spans or []) if kw and _norm_word(w) in kw["words"]}
+
+        def runs(active):
+            out = []
+            for n, (a, b, _, w) in enumerate(spans or []):
+                o = {"color": kw["color"], "size": round(size * kw["scale"], 2)} if (a, b) in keys else {}
+                if hl and active is not None:
+                    if n == active:
+                        grow = max(hl["scale"], kw["scale"] if (a, b) in keys else 1.0)
+                        o = {"color": hl["color"], "size": round(size * grow, 2)}
+                    elif n > active and "upcoming" in hl:
+                        o = dict(o, color=hl["upcoming"])
+                if o:
+                    out.append((a, b, o))
+            return out
+        if not hl or not spans:
+            return [(start, dur, runs(None))]
+        end = start + dur
+        starts = [max(start, min(end, t)) for _, _, t, _ in spans]
+        starts[0] = start
+        pieces = []
+        for n, t in enumerate(starts):
+            stop = starts[n + 1] if n + 1 < len(starts) else end
+            if stop - t >= 40_000 or not pieces and n == len(starts) - 1:
+                pieces.append([t, n])
+        if not pieces:
+            return [(start, dur, runs(None))]
+        pieces[0][0] = start  # a word too short to show gives its time to the piece before it
+        return [(t, (pieces[i + 1][0] if i + 1 < len(pieces) else end) - t, runs(n))
+                for i, (t, n) in enumerate(pieces)]
 
     def build_captions(self):
         caps = self.spec.get("captions")
@@ -1415,9 +1661,15 @@ class Builder:
                 if not cues:
                     self.warnings.append(f"{ctx}: no caption cues found")
                 base = cap.get("track", "captions")
-                for start, dur, text in cues:
-                    seg = self.make_text(text, start, dur, st, ctx)
-                    self.script.add_segment(seg, self.place(cc.TrackType.text, base, seg.target_timerange))
+                hl, kw = self.caption_accents(cap, st, ctx)
+                if (hl or kw) and cues and not any(c[3] for c in cues):
+                    raise SpecError(f"{ctx}: \"highlight\" and \"keywords\" need word times "
+                                    "(\"transcript\" or \"words\"), not an SRT or cues")
+                for start, dur, text, spans in cues:
+                    for a, d, runs in self.caption_pieces(start, dur, spans, st, hl, kw):
+                        seg = self.make_text(text, a, d, st, ctx)
+                        seg.runs = runs
+                        self.script.add_segment(seg, self.place(cc.TrackType.text, base, seg.target_timerange))
                 if cues:
                     self.timeline.append({"kind": "captions", "track": base, "id": None, "start": sec(cues[0][0]),
                                           "end": sec(cues[-1][0] + cues[-1][1]), "what": desc})
@@ -1598,9 +1850,19 @@ class Builder:
             "pro_resources": pro,
             **({"pro_note": "Exporting this draft needs CapCut Pro on the account that exports it."}
                if pro else {}),
+            **({"loudness": self.loudness_report()} if self.loud_target is not None else {}),
             "warnings": self.warnings,
             **({"notes": self.notes} if self.notes else {}),
         }
+
+    def loudness_report(self) -> dict:
+        rows = [row for _, row in self._levels.values() if row]
+        out = {"target_lufs": self.loud_target, "files": rows}
+        if any(r.get("held_by_peak") for r in rows):
+            out["hint"] = ("a peak kept some files below the target; to bring them up, select the clip in "
+                           "CapCut > Audio > Normalize loudness, or set \"loudness\": {\"peak\": null} "
+                           "and accept a little clipping on the loudest sounds")
+        return out
 
 
 STAGING = ".cappus-replaced"  # next to CapCut's drafts folder, on the same drive, so moving a draft there is a rename

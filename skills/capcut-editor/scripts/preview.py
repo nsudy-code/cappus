@@ -10,12 +10,16 @@ motion presets), so times and positions match the draft. What the preview draws:
 
   - main-track clips and overlays: in/out, speed, fit cover/contain, blur or color background,
     transform (x, y, scale, rotation, opacity, flip) and keyframes, so push_in/pan and other motion
-  - texts and captions at their times, positions and sizes, in a stand-in font, with stroke and box
+  - texts and captions at their times, positions and sizes, with stroke and box, in the real font:
+    the file CapCut downloaded for it (its cache, found by the font's md5), else the same font
+    installed on this computer, else a bold stand-in sized to the font's measured width; text with no
+    font in CapCut's own default (CapCut Sans)
   - audio: clip sound and audio items with volume, fades and ducking
 
 What it does not draw: CapCut effects, filters, transitions (cuts are hard), intro/outro/loop
-animations, masks, blend modes, chroma key, Remove BG, stickers and the real fonts. Every frame is
-stamped "PREVIEW - approximate", and the report lists what was left out. Use it to check the cut,
+animations, masks, blend modes, chroma key, Remove BG, stickers, and fonts CapCut has not
+downloaded yet (open the draft once, or use the font in CapCut, and they are cached). Every frame is
+stamped "PREVIEW - approximate", and the report lists what was left out and which fonts stood in. Use it to check the cut,
 timing, framing and where text sits; judge the look in CapCut.
 
 Needs ffmpeg on PATH, Pillow and numpy.
@@ -40,11 +44,97 @@ from build_draft import Builder
 
 LABEL = "PREVIEW - approximate"
 NOT_DRAWN = ("effects, filters, transitions, intro/outro/loop animations, masks, blend modes, chroma key, "
-             "Remove BG, stickers and the real fonts are not drawn")
+             "Remove BG and stickers are not drawn")
 FONT_FILES = ("arialbd.ttf", "Arial Bold.ttf", "DejaVuSans-Bold.ttf", "LiberationSans-Bold.ttf",
               "C:/Windows/Fonts/arialbd.ttf", "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
               "/Library/Fonts/Arial Bold.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf")
 EM_PER_SIZE = 4.7  # CapCut font size 1 is about 4.7 px of em on a 1080 px wide canvas
+
+
+# ---------- fonts: CapCut's own files where it has them ----------
+_font_paths: dict = {}
+
+
+def _norm_name(name: str) -> str:
+    return "".join(ch for ch in str(name).lower() if ch.isalnum())
+
+
+def _capcut_dirs() -> tuple:
+    """(CapCut's "User Data" folders, CapCut install folders) that exist on this computer."""
+    import _env
+    data = []
+    for drafts, _ in _env.drafts_dir_candidates():
+        root = drafts.parent.parent  # .../User Data/Projects/com.lveditor.draft -> .../User Data
+        if (root / "Cache").is_dir() and root not in data:
+            data.append(root)
+    inst = _env.capcut_install()
+    installs = []
+    if inst:
+        root = Path(inst["path"])
+        versions = [root / inst["version"]] if inst.get("version") and (root / inst["version"]).is_dir() else []
+        installs = versions + [root, root / "Contents"]
+    return data, [p for p in installs if p.is_dir()]
+
+
+def _pick(files, name):
+    files = [f for f in files if f.suffix.lower() in (".ttf", ".otf") and "__MACOSX" not in f.parts]
+    if not files:
+        return None
+    want = _norm_name(name)
+    return next((f for f in files if _norm_name(f.stem) == want), None) or \
+        next((f for f in files if want and want in _norm_name(f.stem)), None) or sorted(files)[0]
+
+
+def font_file(member, bold=False):
+    """(path, where) of the font file CapCut draws `member` with, or (None, None).
+
+    member None is CapCut's default text font. A catalog font is in CapCut's cache once CapCut has
+    downloaded it (Cache/effect/<id>/<md5>/), else maybe installed on this computer by name."""
+    info = getattr(member, "value", member)  # a FontType member or the EffectMeta a segment holds
+    key = (getattr(info, "name", None), bold)
+    if key in _font_paths:
+        return _font_paths[key]
+    data, installs = _capcut_dirs()
+    found = (None, None)
+    if member is None:
+        want = "CapCutSansText-Bold" if bold else "CapCutSansText-Regular"
+        for root in installs:
+            hit = next(iter(root.glob(f"Resources/Font/SystemFont/{want}.otf")), None) or \
+                next(iter(root.glob(f"**/Font/SystemFont/{want}.otf")), None)
+            if hit:
+                found = (str(hit), "CapCut default font")
+                break
+    else:
+        md5, name = getattr(info, "md5", None), getattr(info, "name", "")
+        for root in data:
+            if md5:
+                hit = _pick([f for d in (root / "Cache" / "effect").glob(f"*/{md5}") for f in d.rglob("*")], name)
+                if hit:
+                    found = (str(hit), "CapCut's cache")
+                    break
+        if found[0] is None:
+            dirs = [Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts",
+                    Path(os.environ.get("LOCALAPPDATA", "")) / "Microsoft" / "Windows" / "Fonts",
+                    Path("/Library/Fonts"), Path.home() / "Library" / "Fonts", Path("/usr/share/fonts"),
+                    Path.home() / ".fonts", Path.home() / ".local" / "share" / "fonts"]
+            want = _norm_name(name)
+            for d in dirs:
+                if not d.is_dir():
+                    continue
+                hit = next((f for f in d.rglob("*") if f.suffix.lower() in (".ttf", ".otf")
+                            and _norm_name(f.stem) in (want, want + "regular")), None)
+                if hit:
+                    found = (str(hit), "installed on this computer")
+                    break
+    _font_paths[key] = found
+    return found
+
+
+def _true_font(path, px):
+    try:
+        return ImageFont.truetype(path, max(6, int(round(px))))
+    except OSError:
+        return None
 
 
 # ---------- small helpers ----------
@@ -87,7 +177,10 @@ def _kf(seg) -> dict:
     out = {}
     for kl in getattr(seg, "common_keyframes", []) or []:
         kfs = sorted(kl.keyframes, key=lambda k: k.time_offset)
-        pts = [(k.time_offset / 1e6, float(k.values[0]), _curve(kfs[i - 1], k) if i else None)
+        src = getattr(seg, "source_timerange", None)  # media clips: time_offset is time in the file
+        s0 = src.start if src is not None else 0
+        sp = float(getattr(getattr(seg, "speed", None), "speed", 1.0) or 1.0) if src is not None else 1.0
+        pts = [((k.time_offset - s0) / sp / 1e6, float(k.values[0]), _curve(kfs[i - 1], k) if i else None)
                for i, k in enumerate(kfs)]
         if pts:
             out[kl.keyframe_property.name] = pts
@@ -115,6 +208,8 @@ def _transform(seg, t) -> dict:
     if "uniform_scale" in kf:
         sx = sy = _at(kf["uniform_scale"], t, cs.scale_x)
     sx = _at(kf.get("scale_x"), t, cs.scale_x if sx is None else sx)
+    if "scale_x" in kf and "scale_y" not in kf and sy is None:
+        sy = sx  # a uniform scale keyframe lives on the scale_x list alone (pycapcut, CapCut): both sides
     sy = _at(kf.get("scale_y"), t, cs.scale_y if sy is None else sy)
     return {"sx": sx, "sy": sy, "x": _at(kf.get("position_x"), t, cs.transform_x),
             "y": _at(kf.get("position_y"), t, cs.transform_y), "rot": _at(kf.get("rotation"), t, cs.rotation),
@@ -124,7 +219,8 @@ def _transform(seg, t) -> dict:
 def _max_scale(seg) -> tuple:
     cs, kf = seg.clip_settings, seg._kf
     xs = [cs.scale_x] + [p[1] for k in ("uniform_scale", "scale_x") for p in kf.get(k, [])]
-    ys = [cs.scale_y] + [p[1] for k in ("uniform_scale", "scale_y") for p in kf.get(k, [])]
+    ys = [cs.scale_y] + [p[1] for k in ("uniform_scale", "scale_y" if "scale_y" in kf else "scale_x")
+                         for p in kf.get(k, [])]
     return max(xs), max(ys)
 
 
@@ -267,7 +363,7 @@ class VideoLayer:
 
 
 class TextLayer:
-    """A text segment drawn once with Pillow in a stand-in bold font, then placed per frame."""
+    """A text segment drawn once with Pillow in its real font where the file is here, then placed per frame."""
 
     def __init__(self, seg, canvas, k):
         self.seg = seg
@@ -279,10 +375,12 @@ class TextLayer:
     def render(self, k):
         seg, st = self.seg, self.seg.style
         px = st.size * EM_PER_SIZE * self.W / 1080
-        width_factor, caps_only = font_width(seg.font) if seg.font is not None else (None, False)
-        font = _font(px)
+        path, self.font_source = font_file(seg.font, bool(st.bold))
+        real = _true_font(path, px) if path else None
+        width_factor, caps_only = font_width(seg.font) if seg.font is not None and not real else (None, False)
+        font = real or _font(px)
         text = str(seg.text)
-        if width_factor:  # match the curated font's measured width, so wrapping and size read right
+        if width_factor:  # a stand-in: match the curated font's measured width, so wrapping and size read right
             probe = max(text.split("\n"), key=len) or "M"
             caps = probe.upper() == probe and not caps_only
             target = len(probe) * width_factor * st.size * self.W / 1080 * (1.15 if caps else 1.0)
@@ -292,18 +390,22 @@ class TextLayer:
         stroke = 0
         if seg.border is not None:
             stroke = max(1, int(round(px * seg.border.width * 0.6)))  # border.width is CapCut's 0-0.2
-        lines = []
+        lines, starts = [], []  # each line and where it starts in the text (for colored words)
         limit = st.max_line_width * self.W if st.auto_wrapping else None
+        pos = 0
         for para in text.split("\n"):
-            words, cur = para.split(" "), ""
-            for w in words:
-                trial = f"{cur} {w}".strip()
+            cur, cur_at = "", pos
+            for w in para.split(" "):
+                trial = f"{cur} {w}" if cur else w
                 if limit and cur and font.getlength(trial) + 2 * stroke > limit:
                     lines.append(cur)
-                    cur = w
+                    starts.append(cur_at)
+                    cur, cur_at = w, pos
                 else:
                     cur = trial
+                pos += len(w) + 1
             lines.append(cur)
+            starts.append(cur_at)
         gap = int(px * 0.25)
         boxes = [font.getbbox(l or " ", stroke_width=stroke) for l in lines]
         lh = max(b[3] - b[1] for b in boxes) + gap
@@ -326,7 +428,17 @@ class TextLayer:
                 off = max(1, int(px * seg.shadow.distance / 100))
                 d.text((x + off, y + off), line, font=font, fill=_rgb(seg.shadow.color, seg.shadow.alpha * 0.8),
                        stroke_width=stroke, stroke_fill=_rgb(seg.shadow.color, seg.shadow.alpha * 0.8))
-            d.text((x, y), line, font=font, fill=fill, stroke_width=stroke, stroke_fill=sfill)
+            runs = getattr(seg, "runs", ())
+            if not runs:
+                d.text((x, y), line, font=font, fill=fill, stroke_width=stroke, stroke_fill=sfill)
+                continue
+            at = starts[i]  # words in their own color (a caption highlight or keyword); sizes stay the line's
+            cuts = sorted({0, len(line), *(min(len(line), max(0, c - at)) for a, b, _ in runs for c in (a, b))})
+            for a, b in zip(cuts, cuts[1:]):
+                color = next((o["color"] for ra, rb, o in runs if "color" in o and ra <= at + a and at + b <= rb),
+                             None)
+                d.text((x + font.getlength(line[:a]), y), line[a:b], font=font,
+                       fill=_rgb(color, st.alpha) if color else fill, stroke_width=stroke, stroke_fill=sfill)
         return img
 
     def draw(self, canvas, t):
@@ -365,8 +477,9 @@ def collect(builder: Builder, canvas, fps):
                 layers.append(TextLayer(seg, canvas, k))
                 if seg.animations_instance is not None:
                     skipped.add("text animations")
-                if seg.font is not None:
-                    skipped.add("fonts (a stand-in bold font is used)")
+                if layers[-1].font_source is None:
+                    name = seg.font.name if seg.font is not None else "CapCut Sans"
+                    skipped.add(f"font {name} (not downloaded by CapCut here: a stand-in bold font is used)")
             elif kind == "audio":
                 if float(seg.volume) > 0:
                     sounds.append((seg, float(seg.volume)))
@@ -517,6 +630,8 @@ def render(spec_path: Path, out_dir: Path, size=960, fps=15, every=None) -> dict
         "size": f"{canvas[0]}x{canvas[1]}@{fps}", "duration": round(total, 3), "frames": n,
         "sheet_times": [round(t, 2) for t, _, _ in tiles],
         "not_drawn": skipped,
+        "fonts": {(l.seg.font.name if l.seg.font is not None else "CapCut Sans"): l.font_source or "stand-in"
+                  for l in layers if isinstance(l, TextLayer)},
         "note": f"{NOT_DRAWN}; cuts are hard cuts. Check timing, framing and text placement here, the look in CapCut.",
         "warnings": builder.warnings,
     }
