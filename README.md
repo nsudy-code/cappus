@@ -14,6 +14,9 @@ effects, filters, a picture-in-picture and music. Every item on the timeline can
 Works with **free CapCut and CapCut Pro**. You choose which one you have, and cappus only uses
 resources your account can export.
 
+Built for Claude Code, and usable from other AI coding agents that read Agent Skills (Codex, GitHub
+Copilot, Cursor, Gemini CLI): see [Other AI agents](#other-ai-agents).
+
 > Panduan berbahasa Indonesia: [docs/cara-pakai.md](docs/cara-pakai.md)
 
 ### Video tutorial
@@ -79,7 +82,7 @@ your draft never shows a missing effect or an "animation loss" label.
 | Requirement | Notes |
 |---|---|
 | CapCut desktop (international edition) | Tested with CapCut 8.0.1 and 9.8.0 on Windows. macOS uses the same draft format but has not been tested yet. JianYing (the Chinese edition), CapCut mobile and CapCut web are not supported. |
-| Claude Code | The CLI, the Code tab of the Claude desktop app, or an IDE extension. It must run **on the same computer as CapCut**, because drafts are written to CapCut's local drafts folder. Claude.ai chat and cloud sessions cannot do this. |
+| Claude Code, or another AI coding agent | Claude Code (the CLI, the Code tab of the Claude desktop app, or an IDE extension) is what cappus is tested with. Other agents that read Agent Skills also work, see [Other AI agents](#other-ai-agents). The agent must run **on the same computer as CapCut**, because drafts are written to CapCut's local drafts folder. Web chats (Claude.ai, ChatGPT, Gemini) and cloud sessions cannot do this. |
 | Python 3.9 or later | Used by the bundled scripts. |
 | ffmpeg and ffprobe | Must be on your `PATH`. Used to analyze media. |
 | faster-whisper (optional) | Only for captions from speech. Runs offline; the first use downloads a speech model of about 0.5 GB. |
@@ -121,7 +124,40 @@ On macOS or Linux:
 mkdir -p ~/.claude/skills && ln -s "$PWD/cappus/skills/capcut-editor" ~/.claude/skills/capcut-editor
 ```
 
-Use one option, not both. With both, Claude sees the skill twice.
+Use one option, not both. With both, Claude sees the skill twice. (Copilot and Cursor also read
+`~/.claude/skills`, so with them, skip the `~/.agents/skills` link below.)
+
+### Other AI agents
+
+cappus is a standard [Agent Skill](https://agentskills.io): a `SKILL.md` with instructions plus
+plain Python scripts, nothing tied to Claude. Codex, GitHub Copilot (CLI and VS Code agent mode),
+Cursor and Gemini CLI all read skills from `~/.agents/skills`, so one link serves them all.
+Windows (PowerShell), from the folder that contains the clone:
+
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\.agents\skills" | Out-Null; New-Item -ItemType Junction -Path "$env:USERPROFILE\.agents\skills\capcut-editor" -Target "$PWD\cappus\skills\capcut-editor"
+```
+
+macOS or Linux:
+
+```bash
+mkdir -p ~/.agents/skills && ln -s "$PWD/cappus/skills/capcut-editor" ~/.agents/skills/capcut-editor
+```
+
+Each tool also has its own folder (`~/.copilot/skills`, `~/.cursor/skills`, `~/.gemini/skills`)
+if yours does not pick up `~/.agents/skills`. Restart the agent afterwards and ask it to list its
+skills to check. An agent without skill support can still use cappus: open it in the clone and
+ask it to read `skills/capcut-editor/SKILL.md` first ([AGENTS.md](AGENTS.md) tells it so).
+
+What the agent needs:
+
+- **A shell** to run Python and ffmpeg.
+- **Image input**, to look at the contact sheets of your clips. Without it, cuts are chosen from the
+  transcript and pauses only, and are rougher.
+- **A strong model.** The builder rejects an invalid spec, so a weak model cannot break your CapCut,
+  but the quality of the edit (hook, pacing, look) depends on the model.
+
+Only Claude Code is tested so far. Reports from other agents are welcome as issues.
 
 ### 2. Install the Python dependencies
 
