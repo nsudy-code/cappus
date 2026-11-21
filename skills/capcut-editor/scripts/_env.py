@@ -82,7 +82,7 @@ def draft_folder(arg: str, drafts):
     """The draft folder that a command-line argument means, or None.
 
     A bare name is a draft in CapCut's drafts folder, even when the current folder has a folder of the
-    same name (Claude usually works in the user's project folder, which is often named like the draft).
+    same name (the agent usually works in the user's project folder, which is often named like the draft).
     Anything that looks like a path (absolute, or containing a slash) is taken as a path first."""
     path = Path(arg)
     named = drafts / arg if drafts is not None and arg not in (".", "..") else None

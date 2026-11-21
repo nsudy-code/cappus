@@ -175,7 +175,7 @@ an uncurated animation is fine as long as the builder accepts it.
 
 ## Looking at a draft in CapCut
 
-With computer use, Claude can look at the finished draft before handing it over. This is the
+With computer use (screen control), the agent can look at the finished draft before handing it over. This is the
 procedure that worked with CapCut 9.8 on Windows:
 
 1. Ask for access to CapCut (`request_access` with "CapCut"; if the window stays hidden, also the

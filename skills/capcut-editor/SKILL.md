@@ -108,7 +108,7 @@ each shot its best window, a color correction (`adjust`) and a vertical crop off
 or a `reframe_path` for `transform.x_path` when the subject moves across the frame).
 Read its `best.jpg`, then follow "A pile of footage into one edit" in `references/recipes.md`.
 
-Actually open the contact sheets with the Read tool. Choosing in/out points from filenames and
+Actually open the contact sheet images and look at them. Choosing in/out points from filenames and
 durations alone produces edits that cut mid-gesture or hold on nothing. Zoom the sheet into a window
 whenever you need to place a cut precisely - sheet times are approximate (within one frame-step).
 
