@@ -21,7 +21,8 @@ Use it with "preset": "dr-aisya" in a spec, or cut_talk.py --preset dr-aisya. A 
   logo                        {"src": "C:/.../logo.png", "x", "y", "scale", "opacity"}: likewise
   speaker, role               the lower third cut_talk.py adds
   talk                        cut_talk.py defaults: punch, punch_hold, max_pause, pad, hook_first,
-                              broll_every, broll_length, face_y, loudness (LUFS), denoise; max_words is in captions
+                              broll_every, broll_length, face_y, loudness (LUFS), denoise, zoom (mix/smooth/cut/off),
+                              zoom_amount, drift; max_words is in captions
   music                       {"mood", "bpm"}: guidance for music.py
   description                 what the series is, for whoever picks it
 """
@@ -41,7 +42,7 @@ KEYS = {"description", "look", "brand", "fonts", "styles", "captions", "handle",
 CAPTION_KEYS = {"max_words", "max_chars", "max_gap", "uppercase", "punctuation", "style", "highlight",
                 "keywords", "min_duration", "offset"}
 TALK_KEYS = {"punch", "punch_hold", "max_pause", "pad", "hook_first", "broll_every", "broll_length", "face_y",
-             "loudness", "denoise"}
+             "loudness", "denoise", "zoom", "zoom_amount", "drift"}
 HANDLE_KEYS = {"text", "x", "y", "style"}
 LOGO_KEYS = {"src", "x", "y", "scale", "opacity"}
 

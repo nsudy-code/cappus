@@ -94,7 +94,10 @@ the user asks. Trim more than feels comfortable; the first draft is almost alway
    and pass `--face-y`, the face's height from the top. Use `faces.py`'s `title_y` for a title so it
    doesn't cover the face. A punch-in
    on a jump hides it; a framing that changes every half second is tiring, so after a clip shorter
-   than 1 s the framing stays (`--punch-hold`).
+   than 1 s the framing stays (`--punch-hold`). Between cuts the picture should still move: an eased
+   zoom in (about 15%, 0.3 s, `cubic_out`) that lands on the key word, holds about a second and eases
+   back out, at most one every 3 s, and a 3% drift in or out on the clips without one. A hard
+   punch-in hits; an eased zoom leans in. `cut_talk.py` does both (`--zoom mix`).
 4. Hook in the first 2 s: open on the line the report ranks first (a contradiction, warning, number
    or question; `--hook-first` plays it as a teaser before the talk), and state the promise as a title
    over it ("3 MITOS INI TERNYATA BENAR", style `title`, on `@hook`). The report's `hooks` are a

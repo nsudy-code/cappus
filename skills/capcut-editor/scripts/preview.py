@@ -177,7 +177,10 @@ def _kf(seg) -> dict:
     out = {}
     for kl in getattr(seg, "common_keyframes", []) or []:
         kfs = sorted(kl.keyframes, key=lambda k: k.time_offset)
-        pts = [(k.time_offset / 1e6, float(k.values[0]), _curve(kfs[i - 1], k) if i else None)
+        src = getattr(seg, "source_timerange", None)  # media clips: time_offset is time in the file
+        s0 = src.start if src is not None else 0
+        sp = float(getattr(getattr(seg, "speed", None), "speed", 1.0) or 1.0) if src is not None else 1.0
+        pts = [((k.time_offset - s0) / sp / 1e6, float(k.values[0]), _curve(kfs[i - 1], k) if i else None)
                for i, k in enumerate(kfs)]
         if pts:
             out[kl.keyframe_property.name] = pts
@@ -205,6 +208,8 @@ def _transform(seg, t) -> dict:
     if "uniform_scale" in kf:
         sx = sy = _at(kf["uniform_scale"], t, cs.scale_x)
     sx = _at(kf.get("scale_x"), t, cs.scale_x if sx is None else sx)
+    if "scale_x" in kf and "scale_y" not in kf and sy is None:
+        sy = sx  # a uniform scale keyframe lives on the scale_x list alone (pycapcut, CapCut): both sides
     sy = _at(kf.get("scale_y"), t, cs.scale_y if sy is None else sy)
     return {"sx": sx, "sy": sy, "x": _at(kf.get("position_x"), t, cs.transform_x),
             "y": _at(kf.get("position_y"), t, cs.transform_y), "rot": _at(kf.get("rotation"), t, cs.rotation),
@@ -214,7 +219,8 @@ def _transform(seg, t) -> dict:
 def _max_scale(seg) -> tuple:
     cs, kf = seg.clip_settings, seg._kf
     xs = [cs.scale_x] + [p[1] for k in ("uniform_scale", "scale_x") for p in kf.get(k, [])]
-    ys = [cs.scale_y] + [p[1] for k in ("uniform_scale", "scale_y") for p in kf.get(k, [])]
+    ys = [cs.scale_y] + [p[1] for k in ("uniform_scale", "scale_y" if "scale_y" in kf else "scale_x")
+                         for p in kf.get(k, [])]
     return max(xs), max(ys)
 
 

@@ -262,6 +262,20 @@ def points(value, ctx, minimum=2, ease=False) -> list:
     return value
 
 
+def media_time(seg, off) -> int:
+    """A keyframe's time_offset as CapCut reads it: microseconds into the media file, not into the clip.
+
+    CapCut (checked in 9.8.0, a scale keyframe added by hand on a clip trimmed to start 28.865 s into
+    its video saved time_offset 30466666) measures keyframes on a video or audio clip from the start of
+    the file, so a clip offset becomes source start + offset x speed. Texts and stickers have no source
+    and keep clip time; a photo or an untrimmed clip starts at 0, where both agree."""
+    src = getattr(seg, "source_timerange", None)
+    if src is None:
+        return int(round(off))
+    speed = float(getattr(getattr(seg, "speed", None), "speed", 1.0) or 1.0)
+    return int(round(src.start + off * speed))
+
+
 def x_path(tr, ctx) -> list:
     """transform.x_path: [[source_seconds, x], ...], times rising (scan_footage.py's reframe_path)."""
     pts = points(tr["x_path"], f"{ctx}.x_path")
@@ -915,6 +929,7 @@ class Builder:
             placed.sort(key=lambda p: p[0])
             if self.linear_keyframes:
                 placed = [[round(t), v] for t, v in easing.sample(placed)]
+            placed = [[media_time(seg, p[0]), *p[1:]] for p in placed]
             for off, val, *_ in placed:
                 seg.add_keyframe(KF_PROPS[prop], off, val)
             eases = {p[0]: easing.parse(p[2], pc) for p in placed if len(p) > 2 and p[2] not in (None, "linear")}
@@ -1223,7 +1238,7 @@ class Builder:
                     off = max(0, min(dur, off))
                     if off <= last:
                         continue
-                    seg.add_keyframe(off, val)
+                    seg.add_keyframe(media_time(seg, off), val)
                     last = off
                 track = self.place(cc.TrackType.audio, a.get("track", "audio"), seg.target_timerange)
                 self.script.add_segment(seg, track)

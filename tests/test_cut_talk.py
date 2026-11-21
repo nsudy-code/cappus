@@ -79,6 +79,40 @@ def test_punch_ins_alternate_and_keep_the_face_up(talk):
     assert all("transform" not in c for c in spec["video"])
 
 
+def test_eased_zoom_lands_on_the_key_word_and_other_clips_drift(talk):
+    report, spec = cut(talk, "--punch", "1.2", "--face-y", "0.3")
+    clips = spec["video"]
+    # hard punch-ins still alternate at the cuts
+    assert [c.get("transform", {}).get("scale", 1) for c in clips] == [1, 1.2, 1, 1.2]
+    zoom = clips[2]["keyframes"]  # "Ternyata 90% orang kurang minum." on a wide clip
+    assert [z["word"] for z in report["camera"]["zooms"]] == ["90%"]
+    lands = 8.0 - clips[2]["in"] + cut_talk.ZOOM_LEAD
+    assert zoom["scale"][2] == [pytest.approx(lands, abs=0.002), pytest.approx(1.15), "cubic_out"]
+    assert zoom["scale"][1][:2] == [pytest.approx(lands - cut_talk.ZOOM_IN, abs=0.002), 1.0]
+    # the face 40% above centre stays put while it zooms: y = 0.4 * (1 - 1.15)
+    assert zoom["y"][2][1] == pytest.approx(-0.06, abs=1e-3)
+    # every other clip drifts slowly, in and out by turns, around its own framing
+    for c in (clips[0], clips[1], clips[3]):
+        s = [p[1] for p in c["keyframes"]["scale"]]
+        base = c.get("transform", {}).get("scale", 1)
+        assert sorted(s) == [pytest.approx(base), pytest.approx(base * 1.03)]
+    assert report["camera"]["drifting_clips"] == 3
+    check = run("build_draft.py", talk.parent / "talk.cut.json", "--check")
+    assert check.returncode == 0, check.stdout + check.stderr
+
+
+@pytest.mark.parametrize("style, scales, moving", [
+    ("smooth", [1, 1, 1, 1], True),      # no hard punch-ins, the eased zooms and drift stay
+    ("cut", [1, 1.2, 1, 1.2], False),    # punch-ins only, as before
+    ("off", [1, 1, 1, 1], False),
+])
+def test_zoom_styles(talk, style, scales, moving):
+    report, spec = cut(talk, "--punch", "1.2", "--face-y", "0.3", "--zoom", style)
+    assert [c.get("transform", {}).get("scale", 1) for c in spec["video"]] == scales
+    assert any("keyframes" in c for c in spec["video"]) == moving
+    assert bool(report["camera"]["zooms"]) == moving
+
+
 def test_hooks_rank_the_surprising_line_and_tease_it(talk):
     report, spec = cut(talk, "--hook-first", "--hooks", "10")
     assert report["hooks"][0]["text"] == "Ternyata 90% orang kurang minum."

@@ -84,12 +84,13 @@ def build(tmp_path, clip):
                  for k in seg["common_keyframes"]}
 
 
-def test_x_path_becomes_position_keyframes_in_clip_time(tmp_path, media):
-    # source seconds 1..3 played at 2x = a 1 s clip; the path's 2 s point lands half way
+def test_x_path_becomes_position_keyframes_in_source_time(tmp_path, media):
+    # source seconds 1..3 played at 2x = a 1 s clip; the path's 2 s point lands half way.
+    # CapCut reads a media clip's keyframe time as time in the file, so the points sit at 1, 2, 3 s.
     seg, kf = build(tmp_path, {"src": str(media / "landscape.mp4"), "in": 1, "out": 3, "speed": 2, "fit": "cover",
                                "transform": {"x_path": [[0.5, 0.8], [2, 0.0], [3.5, -0.8]]}})
     pts = kf["KFTypePositionX"]
-    assert [t for t, _ in pts] == [0, 500000, 1000000]
+    assert [t for t, _ in pts] == [1000000, 2000000, 3000000]
     assert [v for _, v in pts] == [pytest.approx(0.8 - 0.8 * 0.5 / 1.5), pytest.approx(0.0),
                                    pytest.approx(-0.8 * 1 / 1.5)]
     assert seg["clip"]["transform"]["x"] == pytest.approx(pts[0][1])

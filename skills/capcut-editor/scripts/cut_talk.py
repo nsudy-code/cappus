@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Cut a talking-head recording into a jump-cut edit spec: dead air, fillers and flubbed takes out,
-punch-ins that alternate with the cuts, the strongest lines ranked as hooks, and slots for B-roll.
+punch-ins that alternate with the cuts, smooth zooms onto the key words, the strongest lines ranked
+as hooks, and slots for B-roll.
 
   cut_talk.py talk.mp4                        # needs talk.transcript.json beside it (transcribe.py)
   cut_talk.py talk.mp4 --out edit.json        # where to write the spec (default talk.cut.json)
@@ -8,6 +9,12 @@ punch-ins that alternate with the cuts, the strongest lines ranked as hooks, and
   cut_talk.py talk.mp4 --broll a.mp4 b.mp4    # put these clips in the B-roll slots (muted, full frame)
   cut_talk.py talk.mp4 --max-pause 0.25 --punch 1.2 --look clean_tech
   cut_talk.py long.mp4 --from 312.4 --to 351.0   # only this part of the recording (shorts.py uses it)
+  cut_talk.py talk.mp4 --zoom smooth          # no hard punch-ins: only eased zooms in and out
+
+Camera moves (--zoom): "mix" (default) alternates wide and punched framing at the cuts, eases in
+onto a key word (a number, a rare long word, the start of a strong line) and back out a beat later,
+and lets every other clip drift slowly in or out so the picture never sits dead still. "smooth" does
+the eased zooms and drift without hard punch-ins, "cut" only the hard punch-ins, "off" nothing.
 
 Writes an edit spec for build_draft.py and prints a JSON report: what was cut and why (with the
 words), clip lengths, hook candidates with their scores, and the B-roll slots with what is said
@@ -356,9 +363,9 @@ def content_words(ws, n=3):
     return seen[:n]
 
 
-def keywords_of(words, sentences, every=1):
-    """One word per sentence to color in the captions: a number ("90%", "3") when there is one, else
-    the longest uncommon word (6+ letters, said in at most two sentences)."""
+def key_words(words, sentences, every=1):
+    """[(word index, token)]: one word per sentence worth stressing, a number ("90%", "3") when there is
+    one, else the longest uncommon word (6+ letters, said in at most two sentences)."""
     said = {}
     for s in sentences:
         for t in {norm(words[i]["word"]) for i in s}:
@@ -367,17 +374,61 @@ def keywords_of(words, sentences, every=1):
     for n, s in enumerate(sentences):
         if n % every or len(s) < 3:
             continue
-        toks = [re.sub(r"[^\w%]+", "", words[i]["word"].lower()) for i in s]
-        nums = [t for t in toks if re.search(r"\d", t)]
+        toks = [(i, re.sub(r"[^\w%]+", "", words[i]["word"].lower())) for i in s]
+        nums = [p for p in toks if re.search(r"\d", p[1])]
         if nums:
-            pick = max(nums, key=len)
+            pick = max(nums, key=lambda p: len(p[1]))
         else:
-            cand = [t for t in toks if len(t) >= 6 and t not in STOPWORDS and not is_filler(t)
-                    and said.get(t, 0) <= 2]
-            pick = max(cand, key=len) if cand else None
-        if pick and pick not in out:
+            cand = [p for p in toks if len(p[1]) >= 6 and p[1] not in STOPWORDS and not is_filler(p[1])
+                    and said.get(p[1], 0) <= 2]
+            pick = max(cand, key=lambda p: len(p[1])) if cand else None
+        if pick:
             out.append(pick)
     return out
+
+
+def keywords_of(words, sentences, every=1):
+    """The key words as tokens, once each: the words colored in the captions."""
+    out = []
+    for _, t in key_words(words, sentences, every):
+        if t not in out:
+            out.append(t)
+    return out
+
+
+ZOOM_IN, ZOOM_HOLD, ZOOM_OUT = 0.3, 0.9, 0.45   # seconds: ease in, stay close, ease back out
+ZOOM_GAP = 3.0                                    # seconds of timeline between two zooms
+ZOOM_LEAD = 0.08                                  # the zoom lands just after the word starts
+
+
+def zoom_moments(words, sentences, hooks, top=3):
+    """Source times worth a zoom: each sentence's key word, and the first word of the best hooks."""
+    times = {words[i]["start"] for i, _ in key_words(words, sentences)}
+    for h in hooks[:top]:
+        if h["score"] > 0:
+            times.add(words[h["_s"][0]]["start"])
+    return sorted(times)
+
+
+def plan_moves(clips, moments, style, amount, drift):
+    """Per clip: ("zoom", source time) for an eased zoom onto a word, ("drift", +1/-1) for a slow push
+    in or out, or None. Zooms go on wide clips only (a punched clip is close already), with room for
+    the ease in before the word, at least ZOOM_GAP apart on the timeline."""
+    moves, t_line, last, sign = [], 0.0, -1e9, 1
+    for c in clips:
+        a, b = c["in"], c["out"]
+        move = None
+        if style in ("mix", "smooth") and amount > 0 and not c.get("punched"):
+            for m in moments:
+                at = t_line + m - a
+                if a + ZOOM_IN + 0.05 <= m <= b - 0.35 and at - last >= ZOOM_GAP:
+                    move, last = ("zoom", m), at
+                    break
+        if move is None and style in ("mix", "smooth") and drift > 0 and b - a >= 0.8:
+            move, sign = ("drift", sign), -sign
+        moves.append(move)
+        t_line += b - a
+    return moves
 
 
 def lower_third(name, role, at, look_styles, duration=3.5):
@@ -476,6 +527,13 @@ def main() -> int:
     ap.add_argument("--punch", type=float, default=1.18, help="punch-in scale, 1 = off (1.18)")
     ap.add_argument("--punch-hold", type=float, default=1.0,
                     help="change framing at a cut once the current one has run this long (1.0 s)")
+    ap.add_argument("--zoom", choices=["mix", "smooth", "cut", "off"], default="mix",
+                    help="camera moves: mix = punch-ins at cuts + eased zooms on key words + slow drift "
+                         "(default); smooth = no hard punch-ins; cut = punch-ins only; off = none")
+    ap.add_argument("--zoom-amount", type=float, default=0.15,
+                    help="how far an eased zoom goes in, 0.15 = 15%% closer (0.15)")
+    ap.add_argument("--drift", type=float, default=0.03,
+                    help="slow push in/out on clips without a zoom, 0.03 = 3%% over the clip (0.03)")
     ap.add_argument("--face-y", type=float,
                     help="where the face is, as a fraction of the frame height from the top; skips face "
                          "detection (default: found by faces.py, else 0.38)")
@@ -575,17 +633,19 @@ def main() -> int:
     punched_tf = {"scale": round(args.punch, 3), "y": round(y_face * (1 - args.punch), 3)}
     moving = 0
 
-    def frame(a, b, punched):
+    def frame(a, b, punched, scale=None, follow=True):
         """The transform for source a..b: centred on the face found there (following it across a wide
-        shot when it moves), or the fixed --face-y framing."""
+        shot when it moves), or the fixed --face-y framing. `scale` frames it that close instead of
+        wide (1) or punched (--punch)."""
         nonlocal moving
+        s = scale if scale is not None else (args.punch if punched else 1.0)
         if not pts:
-            return dict(punched_tf) if punched else {}
+            return {"scale": round(s, 3), "y": round(y_face * (1 - s), 3)} if s != 1 else {}
         near = [p for p in pts if a - 0.5 <= p[0] <= b + 0.5] or pts
         face = [statistics.median(p[k] for p in near) for k in (1, 2, 3, 4)]
-        tf = faces.framing(face, iw, ih, cw, ch, args.punch)[1 if punched else 0]
-        if len(near) >= 3 and near is not pts and faces.geometry(iw, ih, cw, ch)[0] > cw * 1.05:
-            xs = [faces.framing(p[1:], iw, ih, cw, ch, args.punch)[1 if punched else 0].get("x", 0.0)
+        tf = faces.framing(face, iw, ih, cw, ch, s)[1 if s != 1 else 0]
+        if follow and len(near) >= 3 and near is not pts and faces.geometry(iw, ih, cw, ch)[0] > cw * 1.05:
+            xs = [faces.framing(p[1:], iw, ih, cw, ch, s)[1 if s != 1 else 0].get("x", 0.0)
                   for p in near]
             if max(xs) - min(xs) > 0.2:
                 tf.pop("x", None)
@@ -593,10 +653,44 @@ def main() -> int:
                 moving += 1
         return tf
 
+    def camera_keys(a, b, tf, punched, move):
+        """Keyframes for a clip's camera move, the framing kept on the face at every scale: an eased
+        zoom onto a word and back out, or a slow drift. Clip time = source time - a (speed 1)."""
+        if not move:
+            return None
+        d = round(b - a, 3)
+        s0 = float(tf.get("scale", 1.0))
+        follow = "x_path" in tf  # x already moves with the face; leave x to it
+
+        def at(s):
+            f = frame(a, b, punched, scale=s, follow=False)
+            return float(f.get("scale", 1.0)), float(f.get("y", 0.0)), float(f.get("x", 0.0))
+
+        if move[0] == "zoom":
+            t = move[1] - a + ZOOM_LEAD
+            s1 = s0 * (1 + args.zoom_amount)
+            base, close = at(s0), at(s1)
+            pts = [(0, base, None), (max(0.0, t - ZOOM_IN), base, None), (t, close, "cubic_out")]
+            if d - t >= ZOOM_HOLD + ZOOM_OUT + 0.2:  # time to ease back out before the cut
+                pts += [(t + ZOOM_HOLD, close, None), (t + ZOOM_HOLD + ZOOM_OUT, base, "cubic_in_out")]
+        else:
+            lo, hi = at(s0), at(s0 * (1 + args.drift))
+            pts = [(0, lo, None), (d, hi, "ease_in_out")] if move[1] > 0 else [(0, hi, None), (d, lo, "ease_in_out")]
+        kf = {}
+        for k, name in ((0, "scale"), (1, "y"), (2, "x")):
+            if name == "x" and follow:
+                continue
+            vals = [p[1][k] for p in pts]
+            if name != "scale" and max(vals) - min(vals) < 0.002:
+                continue
+            kf[name] = [[round(t, 3), round(p[k], 4)] + ([e] if e else []) for t, p, e in pts]
+        return kf
+
     # Framing: alternate wide / punched at a cut once the current framing has held long enough.
+    hard = args.punch > 1 and args.zoom in ("mix", "cut")
     punched, held = False, 0.0
     for n, c in enumerate(clips):
-        if n and args.punch > 1 and held >= args.punch_hold:
+        if n and hard and held >= args.punch_hold:
             punched, held = not punched, 0.0
         c["punched"] = punched
         held += c["out"] - c["in"]
@@ -622,20 +716,32 @@ def main() -> int:
             b = min(duration, teaser["end"] + args.pad)
             item = {"id": "hook", "src": src, "in": round(a, 3), "out": round(b, 3), "fit": args.fit,
                     "note": "teaser: " + teaser["text"][:80]}
-            tf = frame(a, b, args.punch > 1)
+            tf = frame(a, b, hard)
             if tf:
                 item["transform"] = tf
+            if args.zoom in ("mix", "smooth") and args.drift > 0:
+                kf = camera_keys(a, b, tf, hard, ("drift", 1))
+                if kf:
+                    item["keyframes"] = kf
             video_items.append(item)
             skip.update(teaser["_s"][:1])
         else:
             warnings.append("--hook-first: no line scored as a hook within --hook-max; the talk starts as recorded")
 
-    for n, c in enumerate(clips, 1):
+    moves = plan_moves(clips, zoom_moments(words, sentences, hooks), args.zoom, args.zoom_amount, args.drift)
+    zooms = []
+    for n, (c, move) in enumerate(zip(clips, moves), 1):
         inside = [w["word"] for w in snapped if c["in"] <= (w["start"] + w["end"]) / 2 < c["out"]]
         item = {"id": f"t{n}", "src": src, "in": c["in"], "out": c["out"], "fit": args.fit}
         tf = frame(c["in"], c["out"], c["punched"])
         if tf:
             item["transform"] = tf
+        kf = camera_keys(c["in"], c["out"], tf, c["punched"], move)
+        if kf:
+            item["keyframes"] = kf
+            if move[0] == "zoom":
+                said = next((w["word"] for w in words if abs(w["start"] - move[1]) < 1e-6), "")
+                zooms.append({"clip": item["id"], "at_source": round(move[1], 2), "word": said})
         if inside:
             item["note"] = " ".join(inside)[:80]
         video_items.append(item)
@@ -756,6 +862,8 @@ def main() -> int:
         "clip_seconds": {"mean": round(sum(lengths) / len(lengths), 2), "min": round(min(lengths), 2),
                          "max": round(max(lengths), 2)},
         "punched_clips": sum(1 for c in clips if c["punched"]),
+        "camera": {"style": args.zoom, "zooms": zooms,
+                   "drifting_clips": sum(1 for m in moves if m and m[0] == "drift")},
         "keywords": {"words": keywords,
                      "used": bool(spec.get("captions", {}).get("keywords")),
                      "how": "colored in the captions" if spec.get("captions", {}).get("keywords") else

@@ -437,11 +437,13 @@ python skills/capcut-editor/scripts/cut_talk.py video.mp4 --hook-first
 ```
 
 Hasilnya `video.cut.json`, spec yang sudah membuang jeda, "eh"/"em", dan kalimat yang diulang (yang
-dipakai take terakhir), dengan punch-in bergantian di potongan dan caption. Laporannya berisi apa
+dipakai take terakhir), dengan punch-in bergantian di potongan, zoom in halus ke kata kunci (angka,
+kata penting) lalu zoom out lagi, gerakan pelan di klip lainnya supaya gambar tidak diam, dan caption. Laporannya berisi apa
 saja yang dipotong dan alasannya, kalimat yang paling cocok jadi hook, dan slot B-roll beserta
 kalimat yang diucapkan di situ. Opsi: `--hook-first` membuka video dengan kalimat hook terbaik sebagai
 teaser, `--broll a.mp4 b.mp4` mengisi slot B-roll, `--max-pause 0.25` memotong lebih rapat,
-`--punch 1` mematikan punch-in, `--look clean_tech` memakai look tertentu.
+`--punch 1` mematikan punch-in, `--zoom smooth` hanya zoom halus tanpa punch-in mendadak, `--zoom cut`
+hanya punch-in, `--zoom-amount 0.2` zoom lebih dekat, `--look clean_tech` memakai look tertentu.
 
 Kalau OpenCV terpasang, `cut_talk.py` juga mencari wajah: video horizontal di-crop ke vertikal
 mengikuti wajah (ikut bergeser kalau orangnya jalan), punch-in tetap di wajah, dan caption pindah

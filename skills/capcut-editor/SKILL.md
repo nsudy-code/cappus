@@ -137,7 +137,10 @@ jump cuts, reordering and speed changes, and words in the parts you cut are left
 **Someone talking to camera** (talking head, explainer, podcast clip, doctor or teacher tips): after
 `transcribe.py`, run `cut_talk.py talk.mp4` instead of placing the cuts by hand. It writes
 `talk.cut.json`, a spec with the pauses, fillers ("um", "eh") and flubbed takes cut out (the last take
-of a restarted line is kept), punch-ins alternating with the cuts, and captions. With OpenCV
+of a restarted line is kept), punch-ins alternating with the cuts, an eased zoom in onto a key word
+(a number, a rare word, a strong line's first word) that eases back out a beat later, a slow drift on
+the other clips, and captions (`--zoom smooth` drops the hard punch-ins, `--zoom cut` keeps only
+them; the report's `camera.zooms` says which words got one). With OpenCV
 installed (`requirements-faces.txt`; `doctor.py` says) it finds the face: a wide shot is cropped to
 vertical around it (following the speaker who moves), punch-ins keep it in place, and captions move
 off it; without OpenCV, pass `--face-y` (the face's height from the top) after looking at a frame.
